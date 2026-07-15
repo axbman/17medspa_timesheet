@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TimeClock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #111214;
+    --ink-2: #555860;
+    --ink-3: #9a9ea6;
+    --rule: #e2e4e8;
+    --bg: #f7f8fa;
+    --white: #ffffff;
+    --green: #16a34a;
+    --green-bg: #dcfce7;
+    --red: #dc2626;
+    --red-bg: #fee2e2;
+    --amber: #d97706;
+    --amber-bg: #fef3c7;
+    --punch: #0f172a;
+    --blue: #2563eb;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  nav {
+    background: var(--punch);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    height: 52px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 15px; color: #fff; letter-spacing: 0.04em; }
+  .logo span { color: #38bdf8; }
+
+  main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 20px; }
+
+  .card {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  }
+
+  .card-title { font-size: 18px; font-weight: 600; margin-bottom: 2px; }
+  .live-clock { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-3); margin-bottom: 24px; }
+
+  /* ── PIN display ── */
+  .pin-display {
+    display: flex; gap: 8px; justify-content: center;
+    margin-bottom: 20px;
+  }
+  .pin-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--rule);
+    background: var(--bg);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pin-dot.filled { background: var(--punch); border-color: var(--punch); }
+  .pin-dot.error  { background: var(--red);   border-color: var(--red); }
+  .pin-dot.ok     { background: var(--green); border-color: var(--green); }
+
+  /* ── Keypad ── */
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .key {
+    aspect-ratio: 1;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--white);
+    font-size: 20px;
+    font-weight: 500;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.1s, transform 0.08s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .key:hover  { background: var(--bg); }
+  .key:active { transform: scale(0.93); background: var(--rule); }
+  .key.del    { font-size: 15px; color: var(--ink-2); }
+  .key.zero   { grid-column: 2; }
+
+  /* ── Action buttons ── */
+  .btn-row { display: flex; gap: 10px; }
+  .btn {
+    flex: 1; border: none; border-radius: 10px;
+    padding: 13px; font-size: 14px; font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:hover:not(:disabled)  { opacity: 0.88; }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.32; cursor: not-allowed; }
+  .btn-in  { background: var(--green); color: #fff; }
+  .btn-out { background: var(--red);   color: #fff; }
+
+  /* ── Confirm screen ── */
+  .confirm { display: none; text-align: center; padding: 8px 0; }
+  .confirm.active { display: block; }
+  .confirm-name { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  .confirm-sub  { font-size: 13px; color: var(--ink-2); margin-bottom: 18px; }
+  .confirm .btn-row { margin-bottom: 12px; }
+  .btn-cancel { width: 100%; background: none; border: 1px solid var(--rule); border-radius: 10px; padding: 10px; font-size: 13px; font-family: 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+  .btn-cancel:hover { background: var(--bg); }
+
+  /* ── Clock status badge ── */
+  .clock-status-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 18px;
+  }
+  .clock-status-badge .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .badge-in  { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+  .badge-in .dot  { background: var(--green); }
+  .badge-out { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; }
+  .badge-out .dot { background: var(--red); }
+  .badge-none { background: var(--bg); color: var(--ink-3); border: 1px solid var(--rule); }
+  .badge-none .dot { background: var(--ink-3); }
+
+  /* ── Status ── */
+  .status {
+    margin-top: 16px; padding: 11px 14px;
+    border-radius: 8px; font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 40px; line-height: 1.5;
+    background: var(--bg); border: 1px solid var(--rule); color: var(--ink-3);
+    white-space: pre-wrap;
+  }
+  .status.ok     { background: var(--green-bg); color: var(--green); border-color: #bbf7d0; }
+  .status.err    { background: var(--red-bg);   color: var(--red);   border-color: #fecaca; }
+  .status.loading { color: var(--ink-3); }
+
+  .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 5px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer { text-align: center; padding: 14px; font-size: 11px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<nav><div class="logo">TIME<span>CLOCK</span></div></nav>
+
+<main>
+  <div class="card">
+    <div class="card-title">Clock In / Out</div>
+    <div class="live-clock" id="live-clock"></div>
+
+    <!-- PIN entry screen -->
+    <div id="screen-pin">
+      <div class="pin-display" id="pin-display">
+        <div class="pin-dot" id="d0"></div>
+        <div class="pin-dot" id="d1"></div>
+        <div class="pin-dot" id="d2"></div>
+        <div class="pin-dot" id="d3"></div>
+        <div class="pin-dot" id="d4"></div>
+        <div class="pin-dot" id="d5"></div>
+      </div>
+
+      <div class="keypad">
+        <button class="key" onclick="keyPress('1')">1</button>
+        <button class="key" onclick="keyPress('2')">2</button>
+        <button class="key" onclick="keyPress('3')">3</button>
+        <button class="key" onclick="keyPress('4')">4</button>
+        <button class="key" onclick="keyPress('5')">5</button>
+        <button class="key" onclick="keyPress('6')">6</button>
+        <button class="key" onclick="keyPress('7')">7</button>
+        <button class="key" onclick="keyPress('8')">8</button>
+        <button class="key" onclick="keyPress('9')">9</button>
+        <button class="key del" onclick="keyDel()">⌫</button>
+        <button class="key zero" onclick="keyPress('0')">0</button>
+      </div>
+    </div>
+
+    <!-- Confirm screen (shown after PIN verified) -->
+    <div class="confirm" id="screen-confirm">
+      <div class="confirm-name" id="confirm-name"></div>
+      <div id="clock-status-badge" class="clock-status-badge badge-none">
+        <span class="dot"></span>
+        <span id="clock-status-text">No punches today</span>
+      </div>
+      <div class="confirm-sub">Choose an action below</div>
+      <div class="btn-row">
+        <button class="btn btn-in"  onclick="punch('in')">Clock In</button>
+        <button class="btn btn-out" onclick="punch('out')">Clock Out</button>
+      </div>
+      <button class="btn-cancel" onclick="resetToPin()">← Back</button>
+    </div>
+
+    <div class="status loading" id="status">Enter your 6-digit PIN.</div>
+  </div>
+</main>
+
+<footer>Records sync to Google Sheets in real time.</footer>
+
+<script>
+  // ── IMPORTANT: replace with your deployed Apps Script URL ──
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9KUaFTRlAUq30uaSzWEd5IUH93-ouvWP6izDBSbCEMWMSYIKfjmRl1nnceuTVThv6_g/exec';
+
+  let pin = '';
+  let verifiedName = '';
+  let busy = false;
+
+  // ── Live clock ──────────────────────────────────────────────
+  function tick() {
+    const now = new Date();
+    document.getElementById('live-clock').textContent =
+      now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' }) +
+      '  ·  ' + now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+  setInterval(tick, 1000); tick();
+
+  // ── Keypad ──────────────────────────────────────────────────
+  function keyPress(digit) {
+    if (busy || pin.length >= 6) return;
+    pin += digit;
+    updateDots();
+    if (pin.length === 6) setTimeout(submitPin, 120);
+  }
+
+  function keyDel() {
+    if (busy) return;
+    pin = pin.slice(0, -1);
+    updateDots();
+    setStatus('', 'Enter your 6-digit PIN.');
+  }
+
+  function updateDots(state) {
+    for (let i = 0; i < 6; i++) {
+      const dot = document.getElementById('d' + i);
+      dot.className = 'pin-dot';
+      if (state) dot.classList.add(state);
+      else if (i < pin.length) dot.classList.add('filled');
+    }
+  }
+
+  // Also support physical keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key >= '0' && e.key <= '9') keyPress(e.key);
+    else if (e.key === 'Backspace') keyDel();
+  });
+
+  // ── Submit PIN ──────────────────────────────────────────────
+  async function submitPin() {
+    busy = true;
+    setStatus('loading', '<span class="spinner"></span> Verifying…');
+
+    try {
+      const res  = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'verifyPin', pin })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        verifiedName = data.name;
+        updateDots('ok');
+        setStatus('ok', '✓ PIN accepted — ' + verifiedName);
+        setTimeout(() => {
+          document.getElementById('screen-pin').style.display = 'none';
+          document.getElementById('confirm-name').textContent = verifiedName;
+          document.getElementById('screen-confirm').classList.add('active');
+          setClockBadge(data.currentStatus, data.lastPunchTime);
+          setStatus('', 'Clock in or out below.');
+        }, 600);
+      } else {
+        updateDots('error');
+        setStatus('err', '✗ ' + (data.error || 'Invalid PIN. Try again.'));
+        setTimeout(() => { pin = ''; busy = false; updateDots(); setStatus('', 'Enter your 6-digit PIN.'); }, 1200);
+      }
+    } catch (err) {
+      updateDots('error');
+      setStatus('err', 'Network error. Try again.');
+      setTimeout(() => { pin = ''; busy = false; updateDots(); setStatus('', 'Enter your 6-digit PIN.'); }, 1200);
+    }
+  }
+
+  // ── Punch ───────────────────────────────────────────────────
+  async function punch(type) {
+    busy = true;
+    setStatus('loading', '<span class="spinner"></span> Saving…');
+
+    try {
+      const res  = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'punch', name: verifiedName, type })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setStatus('ok',
+          (type === 'in' ? '✓ Clocked IN' : '✓ Clocked OUT') +
+          ' — ' + verifiedName + '\n' + data.date + ' at ' + data.time
+        );
+        setTimeout(resetToPin, 2200);
+      } else if (data.duplicate) {
+        // Already clocked in / out — show warning, stay on confirm screen
+        setStatus('err', '⚠ ' + data.message);
+        busy = false;
+      } else {
+        setStatus('err', 'Error: ' + (data.error || 'Unknown error'));
+        busy = false;
+      }
+    } catch (err) {
+      setStatus('err', 'Network error — punch not saved. Try again.');
+      busy = false;
+    }
+  }
+
+  // ── Reset ───────────────────────────────────────────────────
+  function resetToPin() {
+    pin = ''; busy = false; verifiedName = '';
+    document.getElementById('screen-pin').style.display = '';
+    document.getElementById('screen-confirm').classList.remove('active');
+    updateDots();
+    setStatus('', 'Enter your 6-digit PIN.');
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────
+  function setStatus(cls, html) {
+    const el = document.getElementById('status');
+    el.className = 'status' + (cls ? ' ' + cls : '');
+    el.innerHTML = html;
+  }
+
+  function setClockBadge(status, time) {
+    const badge = document.getElementById('clock-status-badge');
+    const text  = document.getElementById('clock-status-text');
+    badge.className = 'clock-status-badge';
+    if (status === 'IN') {
+      badge.classList.add('badge-in');
+      text.textContent = 'Clocked in' + (time ? ' at ' + time : '');
+    } else if (status === 'OUT') {
+      badge.classList.add('badge-out');
+      text.textContent = 'Clocked out' + (time ? ' at ' + time : '');
+    } else {
+      badge.classList.add('badge-none');
+      text.textContent = 'No punches today';
+    }
+  }
+</script>
+</body>
+</html>
