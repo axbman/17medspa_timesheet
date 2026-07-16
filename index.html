@@ -214,11 +214,73 @@
 
 <script>
   // ── IMPORTANT: replace with your deployed Apps Script URL ──
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9KUaFTRlAUq30uaSzWEd5IUH93-ouvWP6izDBSbCEMWMSYIKfjmRl1nnceuTVThv6_g/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7gwrYQHahL2GNkSDnwwEiocoDt6XQ4W74nqI1DrCbcoseqhUOEO03F1XRIdEkoeG-TQ/exec';
+
+  // ── Geofence config ─────────────────────────────────────────
+  // Add one entry per branch. name must match your branch tab name exactly. Employees location must be within 200 meters.
+
+  const LOCATIONS = [
+    { name: 'Buena Park',    lat: 34.0522,  lng: -118.2437, radius: 200 },
+    { name: 'Cupertino',     lat: 37.3164,  lng: -122.0322, radius: 200 },
+    { name: 'Beverly Hills', lat: 34.0750,  lng: -118.3770, radius : 200},
+    { name: 'Downtown',      lat: 40.7128,  lng: -74.0060,  radius: 200 }, // TEST: same coords
+  ];
+  const GEOFENCE_ENABLED = true; // set false to bypass for testing
 
   let pin = '';
   let verifiedName = '';
+  let verifiedBranch = '';
   let busy = false;
+
+  // Haversine formula — returns distance in meters between two lat/lng points
+  function getDistanceMeters(lat1, lng1, lat2, lng2) {
+    const R   = 6371000; // Earth radius in meters
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const dphi = (lat2 - lat1) * Math.PI / 180;
+    const dlng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dphi/2) * Math.sin(dphi/2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(dlng/2) * Math.sin(dlng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // Returns a Promise — resolves with null (ok) or an error message string
+  function checkGeofence(branchName) {
+    if (!GEOFENCE_ENABLED) return Promise.resolve(null);
+
+    const loc = LOCATIONS.find(l => l.name === branchName);
+    if (!loc) return Promise.resolve(null); // branch not in list — allow
+
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve('Your device does not support location services. Please contact your manager.');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const dist = getDistanceMeters(
+            pos.coords.latitude, pos.coords.longitude,
+            loc.lat, loc.lng
+          );
+          if (dist <= loc.radius) {
+            resolve(null); // inside geofence — ok
+          } else {
+            resolve('You must be at the ' + branchName + ' office to clock in or out. (Distance: ' + Math.round(dist) + 'm away)');
+          }
+        },
+        (err) => {
+          const msgs = {
+            1: 'Location permission denied. Please allow location access and try again.',
+            2: 'Location unavailable. Please try again.',
+            3: 'Location request timed out. Please try again.',
+          };
+          resolve(msgs[err.code] || 'Location error. Please try again.');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
 
   // ── Live clock ──────────────────────────────────────────────
   function tick() {
@@ -273,7 +335,8 @@
       const data = await res.json();
 
       if (data.success) {
-        verifiedName = data.name;
+        verifiedName   = data.name;
+        verifiedBranch = data.branch || '';
         updateDots('ok');
         setStatus('ok', '✓ PIN accepted — ' + verifiedName);
         setTimeout(() => {
@@ -298,6 +361,16 @@
   // ── Punch ───────────────────────────────────────────────────
   async function punch(type) {
     busy = true;
+    setStatus('loading', '<span class="spinner"></span> Checking location…');
+
+    // Geofence check first
+    const geoError = await checkGeofence(verifiedBranch);
+    if (geoError) {
+      setStatus('err', '📍 ' + geoError);
+      busy = false;
+      return;
+    }
+
     setStatus('loading', '<span class="spinner"></span> Saving…');
 
     try {
@@ -330,7 +403,7 @@
 
   // ── Reset ───────────────────────────────────────────────────
   function resetToPin() {
-    pin = ''; busy = false; verifiedName = '';
+    pin = ''; busy = false; verifiedName = ''; verifiedBranch = '';
     document.getElementById('screen-pin').style.display = '';
     document.getElementById('screen-confirm').classList.remove('active');
     updateDots();
