@@ -25,7 +25,7 @@
 //    ...
 // ─────────────────────────────────────────────────────────────
 
-const MASTER_SPREADSHEET_ID = '1_mYj6t7LhAM0GbgtedTFIyQJrGOmCZss09Sg2sgoZ8o';
+const MASTER_SPREADSHEET_ID = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
 const DRIVE_ROOT_FOLDER_ID  = '';          // optional; blank = My Drive root
 const BRANCH_TAB_PREFIX     = ''; // tabs are named directly, e.g. "Buena Park"
 const SUMMARY_SHEET         = 'Summary';
@@ -53,14 +53,15 @@ function doPost(e) {
     }
 
     if (action === 'punch') {
-      const name   = (data.name   || '').trim();
-      const type   = (data.type   || '').trim();
-      const branch = (data.branch || '').trim(); // optional - server resolves it if absent
+      const name       = (data.name   || '').trim();
+      const type       = (data.type   || '').trim();
+      const branch     = (data.branch || '').trim();
+      const clientTime = (data.clientTime || '').trim(); // timestamp from employee's phone
 
       if (!name) return respond({ error: 'Missing employee name.' });
       if (!type) return respond({ error: 'Missing punch type (IN or OUT).' });
 
-      return respond(recordPunch(name, branch, type));
+      return respond(recordPunch(name, branch, type, clientTime));
     }
 
     if (action === 'getLocations') {
@@ -130,7 +131,7 @@ function getBranchForEmployee(employeeName) {
 // ── Record a punch ────────────────────────────────────────────
 // branch is the plain branch name, e.g. "Downtown"
 
-function recordPunch(name, branch, type) {
+function recordPunch(name, branch, type, clientTime) {
   if (!name) throw new Error('recordPunch: employee name is empty.');
   if (!type) throw new Error('recordPunch: punch type (IN/OUT) is missing.');
 
@@ -140,7 +141,14 @@ function recordPunch(name, branch, type) {
     if (!branch) throw new Error('Employee "' + name + '" not found in any branch tab. Check the master sheet.');
   }
 
-  const now  = new Date();
+  // Use client-captured timestamp if available, otherwise fall back to server time
+  var now;
+  if (clientTime) {
+    now = new Date(clientTime);
+    if (isNaN(now.getTime())) now = new Date(); // fallback if parse fails
+  } else {
+    now = new Date();
+  }
   const tz   = Session.getScriptTimeZone();
   const date = Utilities.formatDate(now, tz, 'MM/dd/yyyy');
   const time = Utilities.formatDate(now, tz, 'hh:mm:ss a');
@@ -1541,3 +1549,4 @@ function runFullTest() {
     Logger.log('All tests passed. Safe to deploy.');
   }
 }
+

@@ -214,18 +214,30 @@
 
 <script>
   // ── IMPORTANT: replace with your deployed Apps Script URL ──
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxe-Kkbdq6RvoHpPN2k0cfNaxsRO9vzlAMc2jL5WkRT2zcSMf01WLI1qeqT8BVbOFAxNg/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbywAt5Ft7j6h4FKuIKLYX2epEDp6YHSzFaBIpG3e2LbY3Hiuso-_asYHPMY0iQjj_8nEQ/exec';
 
   // ── Geofence config ─────────────────────────────────────────
-  // Add one entry per branch. name must match your branch tab name exactly. Employees location must be within 200 meters.
-  // Coordinates are formatted as decimal coordinates not DMS
-  const LOCATIONS = [
-    { name: 'Buena Park',    lat: 34.0522,  lng: -118.2437, radius: 200 },
-    { name: 'Cupertino',     lat: 37.3164,  lng: -122.0322, radius: 200 },
-    { name: 'Beverly Center', lat: 34.0750,  lng: -118.3770, radius : 200},
-    { name: 'Downtown',      lat: 34.048595,  lng: -118.2606,  radius: 200 }, // TEST: same coords
-  ];
-  const GEOFENCE_ENABLED = true; // set false to bypass for testing
+  // Locations are fetched from the "Locations" tab in the master sheet.
+  let LOCATIONS = [];       // populated on page load
+  const GEOFENCE_ENABLED = true; // set false to bypass
+
+  // Fetch branch locations from Google Sheet on page load
+  async function loadLocations() {
+    try {
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'getLocations' })
+      });
+      const data = await res.json();
+      if (data.success && data.locations) {
+        LOCATIONS = data.locations;
+      }
+    } catch(e) {
+      console.log('Could not load locations:', e);
+    }
+  }
+  loadLocations(); // fire on page load
 
   let pin = '';
   let verifiedName = '';
@@ -377,7 +389,7 @@
       const res  = await fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'punch', name: verifiedName, type })
+        body: JSON.stringify({ action: 'punch', name: verifiedName, type, clientTime: new Date().toISOString() })
       });
       const data = await res.json();
 
