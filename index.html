@@ -214,16 +214,16 @@
 
 <script>
   // ── IMPORTANT: replace with your deployed Apps Script URL ──
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7gwrYQHahL2GNkSDnwwEiocoDt6XQ4W74nqI1DrCbcoseqhUOEO03F1XRIdEkoeG-TQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxe-Kkbdq6RvoHpPN2k0cfNaxsRO9vzlAMc2jL5WkRT2zcSMf01WLI1qeqT8BVbOFAxNg/exec';
 
   // ── Geofence config ─────────────────────────────────────────
   // Add one entry per branch. name must match your branch tab name exactly. Employees location must be within 200 meters.
-
+  // Coordinates are formatted as decimal coordinates not DMS
   const LOCATIONS = [
     { name: 'Buena Park',    lat: 34.0522,  lng: -118.2437, radius: 200 },
     { name: 'Cupertino',     lat: 37.3164,  lng: -122.0322, radius: 200 },
-    { name: 'Beverly Hills', lat: 34.0750,  lng: -118.3770, radius : 200},
-    { name: 'Downtown',      lat: 40.7128,  lng: -74.0060,  radius: 200 }, // TEST: same coords
+    { name: 'Beverly Center', lat: 34.0750,  lng: -118.3770, radius : 200},
+    { name: 'Downtown',      lat: 34.048595,  lng: -118.2606,  radius: 200 }, // TEST: same coords
   ];
   const GEOFENCE_ENABLED = true; // set false to bypass for testing
 

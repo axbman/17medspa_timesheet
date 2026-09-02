@@ -25,10 +25,15 @@
 //    ...
 // ─────────────────────────────────────────────────────────────
 
-const MASTER_SPREADSHEET_ID = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
+const MASTER_SPREADSHEET_ID = '1_mYj6t7LhAM0GbgtedTFIyQJrGOmCZss09Sg2sgoZ8o';
 const DRIVE_ROOT_FOLDER_ID  = '';          // optional; blank = My Drive root
 const BRANCH_TAB_PREFIX     = ''; // tabs are named directly, e.g. "Buena Park"
 const SUMMARY_SHEET         = 'Summary';
+const LOCATIONS_SHEET       = 'Locations';
+const FORM_TITLE            = 'Clock-Out Correction Form';
+
+// Stores the Google Form ID + pre-fill entry IDs in Script Properties
+// Run createCorrectionForm() once to set these up.
 
 // ── Web App entry points ──────────────────────────────────────
 
@@ -56,6 +61,10 @@ function doPost(e) {
       if (!type) return respond({ error: 'Missing punch type (IN or OUT).' });
 
       return respond(recordPunch(name, branch, type));
+    }
+
+    if (action === 'getLocations') {
+      return respond(getLocations());
     }
 
     return respond({ error: 'Unknown action' });
@@ -156,59 +165,45 @@ function recordPunch(name, branch, type) {
 
   // Write to employee tab using daily-row format
   if (type.toUpperCase() === 'IN') {
-    // Clock IN — create a new row for today, store ISO in col H for accurate duration calc
-    empTab.appendRow([date, time, '', '', '', '', '', now.toISOString()]);
+    // Clock IN — create a new row for today
+    empTab.appendRow([date, time, '', '', '', '', '']);
+    // ARRAYFORMULA in D2 auto-calculates hours when clock-out is filled
   } else {
-    // Clock OUT — find today's row and fill it in, then calculate hours
+    // Clock OUT — find today's open IN row and fill in the clock-out time.
+    // Formulas in D, E, F auto-calculate hours from B and C.
     const data    = empTab.getDataRange().getValues();
     let targetRow = -1;
+
     for (let i = data.length - 1; i >= 1; i--) {
-      const rawDate = data[i][0];
-      const rowDate = rawDate instanceof Date
+      const rawDate   = data[i][0];
+      const rowDate   = rawDate instanceof Date
         ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
         : String(rawDate).trim();
-      if (rowDate === date && data[i][2] === '') {
-        targetRow = i + 1; // 1-indexed
+      const clockOut  = data[i][2];
+      const noClockOut = (clockOut === '' || clockOut === null || clockOut === undefined || clockOut === 0);
+      const clockIn   = data[i][1];
+      const hasClockIn = (clockIn !== '' && clockIn !== null && clockIn !== undefined && clockIn !== 0);
+
+      if (rowDate === date && noClockOut && hasClockIn) {
+        targetRow = i + 1;
         break;
       }
     }
 
     if (targetRow > 0) {
-      // Use ISO timestamp from col H for accurate millisecond-level calculation
-      const isoIn   = String(data[targetRow - 1][7]).trim();
-      const inTime  = isoIn ? new Date(isoIn) : null;
-
-      if (!inTime || isNaN(inTime.getTime())) {
-        Logger.log('recordPunch: could not parse clock-in ISO for row ' + targetRow + ' — ISO: ' + isoIn);
-        empTab.appendRow([date, '', time, '', '', '', 'Clock-in time parse error']);
-        updateSummary(monthly, name, type, date, time);
-        return { success: true, name, branch, type, date, time };
-      }
-
-      const outTime  = now;
-      const totalMs  = outTime - inTime;
-      const totalHrs = totalMs / (1000 * 60 * 60);
-
-      const REG_LIMIT = 8;
-      const regHrs  = Math.min(totalHrs, REG_LIMIT);
-      const otHrs   = Math.max(0, totalHrs - REG_LIMIT);
-
-      const regRounded = Math.round(regHrs * 100) / 100;
-      const otRounded  = Math.round(otHrs  * 100) / 100;
-      const totRounded = Math.round(totalHrs * 100) / 100;
-
-      const notes = otRounded > 0 ? otRounded + ' hrs OT' : '';
-
-      empTab.getRange(targetRow, 3, 1, 5).setValues([[
-        time, regRounded, otRounded, totRounded, notes
-      ]]);
-
-      // Color the OT cell amber if overtime exists
-      if (otRounded > 0) {
+      // Write clock-out time — formulas recalculate automatically
+      empTab.getRange(targetRow, 3).setValue(time);
+      // ARRAYFORMULA auto-recalculates
+      // Read back calculated values for OT highlighting
+      SpreadsheetApp.flush(); // force formula evaluation
+      const otVal = empTab.getRange(targetRow, 5).getValue();
+      if (otVal > 0) {
         empTab.getRange(targetRow, 5).setBackground('#fff2cc').setFontColor('#7f6000');
+        empTab.getRange(targetRow, 7).setValue(Math.round(otVal * 10) / 10 + ' hrs OT');
       }
+      Logger.log('recordPunch OUT: wrote clock-out at ' + time + ' for row ' + targetRow);
     } else {
-      // No matching IN row — append as standalone OUT with note
+      Logger.log('recordPunch OUT: no open IN row found for ' + date);
       empTab.appendRow([date, '', time, '', '', '', 'No matching clock-in']);
     }
   }
@@ -251,7 +246,8 @@ function getCurrentStatus(name, branch) {
     const tz       = Session.getScriptTimeZone();
     const today    = Utilities.formatDate(now, tz, 'MM/dd/yyyy');
     const monthStr = Utilities.formatDate(now, tz, 'MMMM yyyy');
-    const fileName = monthStr + ' ' + branch;
+    const period   = getPeriod(now);
+    const fileName = monthStr + ' ' + period + ' ' + branch;
 
     // Use the branch subfolder - same path recordPunch uses
     const branchFolder = getOrCreateBranchFolder(branch);
@@ -309,7 +305,7 @@ function getCurrentStatus(name, branch) {
 // ── Branch helpers ────────────────────────────────────────────
 
 // Non-branch tabs to exclude when scanning for branch tabs
-const EXCLUDED_TABS = ['Summary', 'Employees', 'Sheet1'];
+const EXCLUDED_TABS = ['Summary', 'Employees', 'Sheet1', 'Locations'];
 
 // Returns all branch sheets - any tab not in the excluded list
 function getBranchSheets(ss) {
@@ -422,18 +418,34 @@ function getOrCreateEmployeeTab(ss, name) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    // Col A=Date, B=Clock In, C=Clock Out, D=Regular Hrs, E=OT Hrs, F=Total Hrs, G=Notes, H=ClockIn ISO (hidden)
-    sheet.appendRow(['Date', 'Clock In', 'Clock Out', 'Regular Hrs', 'OT Hrs', 'Total Hrs', 'Notes', 'ClockIn ISO']);
-    sheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+    // Col A=Date, B=Clock In, C=Clock Out, D=Regular Hrs, E=OT Hrs, F=Total Hrs, G=Notes
+    sheet.appendRow(['Date', 'Clock In', 'Clock Out', 'Regular Hrs', 'OT Hrs', 'Total Hrs', 'Notes']);
+    sheet.getRange(1, 1, 1, 7).setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidth(1, 110);  // Date
-    sheet.setColumnWidth(2, 120);  // Clock In
-    sheet.setColumnWidth(3, 120);  // Clock Out
-    sheet.setColumnWidth(4, 110);  // Regular Hrs
-    sheet.setColumnWidth(5, 90);   // OT Hrs
-    sheet.setColumnWidth(6, 100);  // Total Hrs
-    sheet.setColumnWidth(7, 180);  // Notes
-    sheet.hideColumns(8);          // ClockIn ISO — hidden, used for calculation only
+    sheet.setColumnWidth(1, 110);
+    sheet.setColumnWidth(2, 120);
+    sheet.setColumnWidth(3, 120);
+    sheet.setColumnWidth(4, 110);
+    sheet.setColumnWidth(5, 90);
+    sheet.setColumnWidth(6, 100);
+    sheet.setColumnWidth(7, 180);
+
+    // ARRAYFORMULA in row 2 — auto-calculates hours for ALL rows, including manually added ones.
+    // Regular Hrs: capped at 8
+    sheet.getRange(2, 4).setFormula(
+      '=ARRAYFORMULA(IF((B2:B<>"")*(C2:C<>""),' +
+      'ROUND(IF((TIMEVALUE(C2:C)-TIMEVALUE(B2:B))*24>8,8,(TIMEVALUE(C2:C)-TIMEVALUE(B2:B))*24),1),""))'
+    );
+    // OT Hrs: anything above 8
+    sheet.getRange(2, 5).setFormula(
+      '=ARRAYFORMULA(IF((B2:B<>"")*(C2:C<>""),' +
+      'ROUND(IF((TIMEVALUE(C2:C)-TIMEVALUE(B2:B))*24>8,(TIMEVALUE(C2:C)-TIMEVALUE(B2:B))*24-8,0),1),""))'
+    );
+    // Total Hrs
+    sheet.getRange(2, 6).setFormula(
+      '=ARRAYFORMULA(IF((B2:B<>"")*(C2:C<>""),' +
+      'ROUND((TIMEVALUE(C2:C)-TIMEVALUE(B2:B))*24,1),""))'
+    );
   }
   return sheet;
 }
@@ -456,9 +468,9 @@ function calcTotalHours(ss, name) {
   }
 
   return {
-    reg:   Math.round(reg   * 100) / 100,
-    ot:    Math.round(ot    * 100) / 100,
-    total: Math.round((reg + ot) * 100) / 100
+    reg:   Math.round(reg   * 10) / 10,
+    ot:    Math.round(ot    * 10) / 10,
+    total: Math.round((reg + ot) * 10) / 10
   };
 }
 
@@ -509,6 +521,288 @@ function colorRow(sheet, row, type, isMissed) {
 // ── Midnight auto-check ───────────────────────────────────────
 // Runs for every branch's monthly file.
 
+// ── Google Form for clock-out correction ──────────────────────
+// Run createCorrectionForm() once from the editor.
+// It creates a Google Form and stores its ID and field entry IDs
+// in Script Properties so the email can build pre-filled URLs.
+
+function createCorrectionForm() {
+  const form = FormApp.create(FORM_TITLE);
+  form.setDescription('Submit your actual clock-out time for a missed day. Your PIN is required for verification.');
+  form.setCollectEmail(false);
+  form.setConfirmationMessage('Thank you. Your timesheet has been updated.');
+
+  // Add fields — order matters for pre-fill URL
+  const nameItem   = form.addTextItem().setTitle('Employee Name').setRequired(true);
+  const dateItem   = form.addTextItem().setTitle('Date (MM/DD/YYYY)').setRequired(true);
+  const branchItem = form.addTextItem().setTitle('Branch').setRequired(true);
+  const pinItem    = form.addTextItem().setTitle('6-Digit PIN').setRequired(true);
+  const timeItem   = form.addTextItem().setTitle('Actual Clock-Out Time (e.g. 5:30 PM)').setRequired(true);
+
+  // Store IDs in Script Properties for building pre-fill URLs
+  const props = PropertiesService.getScriptProperties();
+  props.setProperties({
+    'CORRECTION_FORM_ID':     form.getId(),
+    'CORRECTION_FORM_URL':    form.getPublishedUrl(),
+    'ENTRY_NAME':             String(nameItem.getId()),
+    'ENTRY_DATE':             String(dateItem.getId()),
+    'ENTRY_BRANCH':           String(branchItem.getId()),
+  });
+
+  // Install form submit trigger
+  ScriptApp.newTrigger('onCorrectionFormSubmit')
+    .forForm(form)
+    .onFormSubmit()
+    .create();
+
+  // Move form to same folder as master sheet
+  try {
+    const formFile = DriveApp.getFileById(form.getId());
+    const root = getRootFolder();
+    root.addFile(formFile);
+    DriveApp.getRootFolder().removeFile(formFile);
+  } catch(e) {}
+
+  Logger.log('Correction form created:');
+  Logger.log('  URL:  ' + form.getPublishedUrl());
+  Logger.log('  Edit: ' + form.getEditUrl());
+  Logger.log('  ID:   ' + form.getId());
+  Logger.log('Form submit trigger installed.');
+}
+
+// Builds a pre-filled Google Form URL for a specific employee and date.
+function buildCorrectionFormUrl(name, date, branch) {
+  const props   = PropertiesService.getScriptProperties();
+  const formUrl = props.getProperty('CORRECTION_FORM_URL');
+  const eName   = props.getProperty('ENTRY_NAME');
+  const eDate   = props.getProperty('ENTRY_DATE');
+  const eBranch = props.getProperty('ENTRY_BRANCH');
+
+  if (!formUrl || !eName || !eDate || !eBranch) {
+    Logger.log('buildCorrectionFormUrl: form not set up. Run createCorrectionForm() first.');
+    return '';
+  }
+
+  return formUrl +
+    '?entry.' + eName   + '=' + encodeURIComponent(name) +
+    '&entry.' + eDate   + '=' + encodeURIComponent(date) +
+    '&entry.' + eBranch + '=' + encodeURIComponent(branch);
+}
+
+// ── Form submission handler ──────────────────────────────────
+// Triggered automatically when an employee submits the correction form.
+
+function onCorrectionFormSubmit(e) {
+  const responses = e.response.getItemResponses();
+  const vals = {};
+  responses.forEach(r => { vals[r.getItem().getTitle()] = r.getResponse(); });
+
+  const name         = (vals['Employee Name'] || '').trim();
+  const date         = (vals['Date (MM/DD/YYYY)'] || '').trim();
+  const branch       = (vals['Branch'] || '').trim();
+  const pin          = (vals['6-Digit PIN'] || '').trim();
+  const rawTime      = (vals['Actual Clock-Out Time (e.g. 5:30 PM)'] || '').trim();
+
+  Logger.log('Correction form submitted: name=' + name + ' date=' + date + ' branch=' + branch + ' time=' + rawTime);
+
+  // Verify PIN
+  const verify = verifyPin(pin);
+  if (!verify.success || verify.name !== name) {
+    Logger.log('Correction rejected: PIN mismatch for ' + name);
+    return;
+  }
+
+  // Parse the clock-out time — normalize to HH:MM:SS AM/PM
+  const clockOutTime = normalizeTime(rawTime);
+  if (!clockOutTime) {
+    Logger.log('Correction rejected: could not parse time "' + rawTime + '"');
+    return;
+  }
+
+  // Find the monthly file
+  const tz        = Session.getScriptTimeZone();
+  const dateParts = date.split('/');
+  if (dateParts.length !== 3) {
+    Logger.log('Correction rejected: bad date format "' + date + '"');
+    return;
+  }
+  const dateObj  = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
+  const monthly  = getOrCreateMonthlySheet(dateObj, branch);
+  const empSheet = monthly.getSheetByName(name);
+
+  if (!empSheet) {
+    Logger.log('Correction rejected: no tab for ' + name + ' in monthly file');
+    return;
+  }
+
+  // Find the row for that date
+  const sheetData = empSheet.getDataRange().getValues();
+  let targetRow   = -1;
+
+  for (let i = sheetData.length - 1; i >= 1; i--) {
+    const rawDate = sheetData[i][0];
+    const rowDate = rawDate instanceof Date
+      ? Utilities.formatDate(rawDate, tz, 'MM/dd/yyyy')
+      : String(rawDate).trim();
+    if (rowDate !== date) continue;
+
+    const hasIn      = String(sheetData[i][1]).trim() !== '';
+    const currentOut = String(sheetData[i][2]).trim();
+    const rowNotes   = String(sheetData[i][6]).trim();
+    const isMissed   = currentOut === '11:59:00 PM' || rowNotes === 'MISSED CLOCK-OUT';
+
+    if (hasIn && (currentOut === '' || currentOut === '0' || isMissed)) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow < 0) {
+    Logger.log('Correction rejected: no open/missed row for ' + name + ' on ' + date);
+    return;
+  }
+
+  // Write corrected clock-out time — ARRAYFORMULA auto-calculates hours
+  empSheet.getRange(targetRow, 3).setValue(clockOutTime);
+  empSheet.getRange(targetRow, 7).setValue('Corrected by employee');
+
+  SpreadsheetApp.flush(); // force formula evaluation
+  const otVal = empSheet.getRange(targetRow, 5).getValue();
+  if (otVal > 0) {
+    empSheet.getRange(targetRow, 5).setBackground('#fff2cc').setFontColor('#7f6000');
+    empSheet.getRange(targetRow, 7).setValue('Corrected by employee | ' + Math.round(otVal * 10) / 10 + ' hrs OT');
+  }
+
+  const regRounded = empSheet.getRange(targetRow, 4).getValue();
+  const otRounded  = otVal;
+
+  updateSummary(monthly, name, 'out', date, clockOutTime);
+  Logger.log('Correction applied: ' + name + ' on ' + date + ' at ' + clockOutTime + ' (reg=' + regRounded + ', ot=' + otRounded + ')');
+}
+
+// Normalize user-entered time like "5:30 pm", "17:30", "530pm" to "05:30:00 PM"
+function normalizeTime(raw) {
+  if (!raw) return null;
+  var s = raw.trim().toUpperCase();
+
+  // Try "H:MM PM" or "HH:MM PM" or "H:MM:SS PM"
+  var match = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (match) {
+    var h = String(parseInt(match[1])).padStart(2, '0');
+    var m = match[2];
+    var sec = match[3] || '00';
+    return h + ':' + m + ':' + sec + ' ' + match[4];
+  }
+
+  // Try 24-hour "17:30" or "17:30:00"
+  match = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (match) {
+    var hr = parseInt(match[1]);
+    var ampm = hr >= 12 ? 'PM' : 'AM';
+    if (hr > 12) hr -= 12;
+    if (hr === 0) hr = 12;
+    return String(hr).padStart(2, '0') + ':' + match[2] + ':' + (match[3] || '00') + ' ' + ampm;
+  }
+
+  // Try "530pm" or "530 pm"
+  match = s.match(/^(\d{1,4})\s*(AM|PM)$/);
+  if (match) {
+    var num = match[1];
+    var mins = num.length <= 2 ? '00' : num.slice(-2);
+    var hrs  = num.length <= 2 ? num : num.slice(0, -2);
+    return String(parseInt(hrs)).padStart(2, '0') + ':' + mins + ':00 ' + match[2];
+  }
+
+  return null; // could not parse
+}
+
+// ── Email reminder for employees still clocked in ─────────────
+// Runs at 11:50 PM — gives employees ~9 minutes to clock out
+// before the auto-logout at 11:55 PM.
+// Reads email from col D of each branch tab: Name (A) | PIN (B) | Token (C) | Email (D)
+
+function sendClockOutReminders() {
+  const now       = new Date();
+  const tz        = Session.getScriptTimeZone();
+  const checkDate = Utilities.formatDate(now, tz, 'MM/dd/yyyy');
+  const dateNice  = Utilities.formatDate(now, tz, 'EEEE, MMMM d, yyyy');
+
+  const master   = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
+  const branches = getBranchNames(master);
+  let sent = 0;
+
+  // Build a map of employee name → email from all branch tabs
+  const emailMap = {};
+  getBranchSheets(master).forEach(sheet => {
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const name  = String(data[i][0]).trim();
+      const email = String(data[i][2]).trim(); // col C = Email
+      if (name && email && email.indexOf('@') !== -1) {
+        emailMap[name] = email;
+      }
+    }
+  });
+
+  branches.forEach(branch => {
+    try {
+      const monthly = getOrCreateMonthlySheet(now, branch);
+
+      monthly.getSheets().forEach(sheet => {
+        const name = sheet.getName();
+        if (name === SUMMARY_SHEET) return;
+
+        const data = sheet.getDataRange().getValues();
+
+        for (let i = 1; i < data.length; i++) {
+          const rawDate = data[i][0];
+          const rowDate = rawDate instanceof Date
+            ? Utilities.formatDate(rawDate, tz, 'MM/dd/yyyy')
+            : String(rawDate).trim();
+          if (rowDate !== checkDate) continue;
+
+          const hasIn  = String(data[i][1]).trim() !== '';
+          const hasOut = String(data[i][2]).trim() !== '';
+
+          // Still clocked in — send reminder
+          if (hasIn && !hasOut && emailMap[name]) {
+            const clockInTime = String(data[i][1]).trim();
+            try {
+              MailApp.sendEmail({
+                to: emailMap[name],
+                subject: 'Clock-Out Reminder - ' + dateNice,
+                htmlBody:
+                  '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">' +
+                  '<h2 style="color:#0f172a;">Clock-Out Reminder</h2>' +
+                  '<p>Hi ' + name + ',</p>' +
+                  '<p>You clocked in at <strong>' + clockInTime + '</strong> today (' + dateNice + ') ' +
+                  'at the <strong>' + branch + '</strong> location but have not clocked out yet.</p>' +
+                  '<p>Please clock out before midnight. If you miss the deadline, ' +
+                  'you can submit your actual clock-out time using the form below:</p>' +
+                  '<p style="margin:16px 0;">' +
+                  '<a href="' + buildCorrectionFormUrl(name, checkDate, branch) +
+                  '" style="display:inline-block;padding:12px 24px;background:#0f172a;color:#fff;' +
+                  'text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">' +
+                  'Submit Clock-Out Time</a></p>' +
+                  '<p style="color:#9a9ea6;font-size:12px;margin-top:24px;">- TimeClock System</p>' +
+                  '</div>'
+              });
+              sent++;
+              Logger.log('Reminder sent to ' + name + ' (' + emailMap[name] + ') — ' + branch);
+            } catch(emailErr) {
+              Logger.log('Failed to send email to ' + name + ': ' + emailErr.message);
+            }
+          }
+        }
+      });
+    } catch(e) {
+      Logger.log('sendClockOutReminders error for branch ' + branch + ': ' + e.message);
+    }
+  });
+
+  Logger.log('Clock-out reminders sent: ' + sent);
+}
+
 function checkMissedClockOuts() {
   // This runs at 11:55 PM - check today's date
   const now       = new Date();
@@ -539,8 +833,10 @@ function checkMissedClockOuts() {
 
         // Row has clock-in but no clock-out — missed
         if (hasIn && !hasOut) {
-          // Fill in 11:59 PM as clock-out, zero OT, mark as missed
-          sheet.getRange(i + 1, 3, 1, 5).setValues([['11:59:00 PM', 8, 0, 8, 'MISSED CLOCK-OUT']]);
+          // Fill in 11:59 PM as clock-out — formulas auto-calculate hours
+          sheet.getRange(i + 1, 3).setValue('11:59:00 PM');
+          // ARRAYFORMULA auto-recalculates hours
+          sheet.getRange(i + 1, 7).setValue('MISSED CLOCK-OUT');
           sheet.getRange(i + 1, 7).setBackground('#fff2cc').setFontColor('#7f6000');
           updateSummary(monthly, name, 'out', checkDate, 'MISSED CLOCK-OUT');
           Logger.log('Missed clock-out logged for ' + name + ' (' + branch + ') on ' + checkDate);
@@ -605,6 +901,22 @@ function setup() {
     getOrCreateBranchFolder(branch);
   });
 
+  // Create Locations tab if missing
+  if (!master.getSheetByName(LOCATIONS_SHEET)) {
+    const locSheet = master.insertSheet(LOCATIONS_SHEET);
+    locSheet.appendRow(['Branch', 'Latitude', 'Longitude', 'Radius (meters)']);
+    locSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+    locSheet.setFrozenRows(1);
+    locSheet.setColumnWidth(1, 180);
+    locSheet.setColumnWidth(2, 130);
+    locSheet.setColumnWidth(3, 130);
+    locSheet.setColumnWidth(4, 140);
+    // Sample row — edit with real coordinates
+    locSheet.appendRow(['Buena Park', 34.04819, -118.26051, 200]);
+    locSheet.appendRow(['Cupertino', 37.32299, -122.03218, 200]);
+    Logger.log('Created Locations tab with sample data');
+  }
+
   Logger.log('Setup complete. Branch tabs and Drive folders are ready.');
   Logger.log('Add employees to each "Branch - X" tab, then deploy the Web App.');
 }
@@ -612,11 +924,14 @@ function setup() {
 function installTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => {
     const fn = t.getHandlerFunction();
-    if (['checkMissedClockOuts', 'createNewMonthSheet', 'createP2Sheet'].includes(fn)) {
+    if (['checkMissedClockOuts', 'createNewMonthSheet', 'createP2Sheet', 'sendClockOutReminders'].includes(fn)) {
       ScriptApp.deleteTrigger(t);
     }
   });
-  // 11:55 PM daily — missed clock-out check
+  // 11:50 PM daily — email reminder to employees still clocked in
+  ScriptApp.newTrigger('sendClockOutReminders')
+    .timeBased().everyDays(1).atHour(23).nearMinute(50).create();
+  // 11:55 PM daily — auto-log missed clock-outs
   ScriptApp.newTrigger('checkMissedClockOuts')
     .timeBased().everyDays(1).atHour(23).nearMinute(55).create();
   // 1st of month — pre-create P1 files
@@ -625,7 +940,7 @@ function installTriggers() {
   // 16th of month — pre-create P2 files
   ScriptApp.newTrigger('createP2Sheet')
     .timeBased().onMonthDay(16).atHour(0).create();
-  Logger.log('Triggers installed: missed clock-out, P1 (1st), P2 (16th).');
+  Logger.log('Triggers installed: email reminder (11:50 PM), missed clock-out (11:55 PM), P1 (1st), P2 (16th).');
 }
 
 // ── DEBUG - run this from the Apps Script editor ─────────────
@@ -773,6 +1088,89 @@ function migrateFileNames() {
   Logger.log('Migration complete.');
 }
 
+// ── Recalculate Summary ───────────────────────────────────────
+// Run this from the editor to refresh the Summary tab for every branch's
+// current period file. Reads the formula-calculated values from each
+// employee tab and updates the Summary.
+
+function recalculateSummary() {
+  const now    = new Date();
+  const master = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
+  const branches = getBranchNames(master);
+
+  branches.forEach(function(branch) {
+    try {
+      var monthly = getOrCreateMonthlySheet(now, branch);
+      var summary = monthly.getSheetByName(SUMMARY_SHEET);
+      if (!summary) return;
+
+      // Clear existing summary rows (keep header)
+      var lastRow = summary.getLastRow();
+      if (lastRow > 1) {
+        summary.getRange(2, 1, lastRow - 1, 7).clearContent();
+        summary.getRange(2, 1, lastRow - 1, 7).clearFormat();
+      }
+
+      var summaryRow = 2;
+      monthly.getSheets().forEach(function(sheet) {
+        var empName = sheet.getName();
+        if (empName === SUMMARY_SHEET) return;
+
+        var hrs = calcTotalHours(monthly, empName);
+
+        // Find last punch info
+        var data = sheet.getDataRange().getValues();
+        var lastAction = '';
+        var lastDate   = '';
+        var lastTime   = '';
+
+        for (var i = data.length - 1; i >= 1; i--) {
+          var hasIn  = String(data[i][1]).trim() !== '';
+          var hasOut = String(data[i][2]).trim() !== '';
+          if (hasIn && hasOut) {
+            lastAction = 'CLOCKED OUT';
+            lastDate   = data[i][0] instanceof Date
+              ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), 'MM/dd/yyyy')
+              : String(data[i][0]).trim();
+            lastTime = String(data[i][2]).trim();
+            break;
+          } else if (hasIn && !hasOut) {
+            lastAction = 'CLOCKED IN';
+            lastDate   = data[i][0] instanceof Date
+              ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), 'MM/dd/yyyy')
+              : String(data[i][0]).trim();
+            lastTime = String(data[i][1]).trim();
+            break;
+          }
+        }
+
+        summary.getRange(summaryRow, 1, 1, 7).setValues([[
+          empName, lastAction, lastDate, lastTime, hrs.reg, hrs.ot, hrs.total
+        ]]);
+
+        // Color the status cell
+        var statusCell = summary.getRange(summaryRow, 2);
+        if (lastAction === 'CLOCKED IN') {
+          statusCell.setBackground('#d9ead3').setFontColor('#38761d');
+        } else if (lastAction === 'CLOCKED OUT') {
+          statusCell.setBackground('#f4cccc').setFontColor('#cc0000');
+        }
+        if (hrs.ot > 0) {
+          summary.getRange(summaryRow, 6).setBackground('#fff2cc').setFontColor('#7f6000');
+        }
+
+        summaryRow++;
+      });
+
+      Logger.log('Recalculated summary for ' + branch + ' — ' + (summaryRow - 2) + ' employees');
+    } catch(e) {
+      Logger.log('recalculateSummary error for ' + branch + ': ' + e.message);
+    }
+  });
+
+  Logger.log('All summaries recalculated.');
+}
+
 // ── Automated Test Suite ──────────────────────────────────────
 // Run runFullTest() from the Apps Script editor.
 // It will:
@@ -791,6 +1189,8 @@ const TEST_EMPLOYEE_1  = 'TEST Alice';
 const TEST_EMPLOYEE_2  = 'TEST Bob';
 const TEST_PIN_1       = '999001';
 const TEST_PIN_2       = '999002';
+const TEST_EMAIL_1     = 'test-alice@example.com';
+const TEST_EMAIL_2     = 'test-bob@example.com';
 
 function runFullTest() {
   Logger.log('');
@@ -825,9 +1225,9 @@ function runFullTest() {
       Logger.log('  Removed existing test tab');
     }
     testSheet = master.insertSheet(TEST_BRANCH);
-    testSheet.appendRow(['Name', 'PIN']);
-    testSheet.appendRow([TEST_EMPLOYEE_1, TEST_PIN_1]);
-    testSheet.appendRow([TEST_EMPLOYEE_2, TEST_PIN_2]);
+    testSheet.appendRow(['Name', 'PIN', 'Email']);
+    testSheet.appendRow([TEST_EMPLOYEE_1, TEST_PIN_1, TEST_EMAIL_1]);
+    testSheet.appendRow([TEST_EMPLOYEE_2, TEST_PIN_2, TEST_EMAIL_2]);
     assert('Test branch tab created', master.getSheetByName(TEST_BRANCH) !== null);
     assert('Employee 1 row exists', testSheet.getLastRow() >= 2);
   } catch(e) {
@@ -996,9 +1396,108 @@ function runFullTest() {
     assert('P1/P2 separation', false, e.message);
   }
 
-  // ── STEP 8: Cleanup ───────────────────────────────────────
+  // ── STEP 8: normalizeTime parsing ──────────────────────────
   Logger.log('');
-  Logger.log('── Step 8: Cleanup ──');
+  Logger.log('── Step 8: normalizeTime ──');
+  try {
+    assert('Parses "5:30 PM"',        normalizeTime('5:30 PM')    === '05:30:00 PM', normalizeTime('5:30 PM'));
+    assert('Parses "05:30:00 PM"',     normalizeTime('05:30:00 PM') === '05:30:00 PM', normalizeTime('05:30:00 PM'));
+    assert('Parses "17:30"',           normalizeTime('17:30')      === '05:30:00 PM', normalizeTime('17:30'));
+    assert('Parses "9:00 AM"',         normalizeTime('9:00 AM')    === '09:00:00 AM', normalizeTime('9:00 AM'));
+    assert('Parses "12:00 PM"',        normalizeTime('12:00 PM')   === '12:00:00 PM', normalizeTime('12:00 PM'));
+    assert('Parses "530pm"',           normalizeTime('530pm')      === '05:30:00 PM', normalizeTime('530pm'));
+    assert('Parses "1:05 am"',         normalizeTime('1:05 am')    === '01:05:00 AM', normalizeTime('1:05 am'));
+    assert('Returns null for garbage', normalizeTime('banana')     === null,          String(normalizeTime('banana')));
+    assert('Returns null for empty',   normalizeTime('')           === null,          String(normalizeTime('')));
+  } catch(e) {
+    assert('normalizeTime', false, e.message);
+  }
+
+  // ── STEP 9: getLocations ──────────────────────────────────
+  Logger.log('');
+  Logger.log('── Step 9: getLocations ──');
+  try {
+    const locs = getLocations();
+    assert('getLocations returns success', locs.success === true, JSON.stringify(locs));
+    assert('getLocations returns array',   Array.isArray(locs.locations), typeof locs.locations);
+    if (locs.locations.length > 0) {
+      const first = locs.locations[0];
+      assert('Location has name',   typeof first.name === 'string' && first.name !== '', first.name);
+      assert('Location has lat',    typeof first.lat === 'number' && !isNaN(first.lat), String(first.lat));
+      assert('Location has lng',    typeof first.lng === 'number' && !isNaN(first.lng), String(first.lng));
+      assert('Location has radius', typeof first.radius === 'number' && first.radius > 0, String(first.radius));
+    } else {
+      Logger.log('  (No locations in sheet — skipping field checks. Add rows to Locations tab.)');
+    }
+  } catch(e) {
+    assert('getLocations', false, e.message);
+  }
+
+  // ── STEP 10: Correction form URL builder ──────────────────
+  Logger.log('');
+  Logger.log('── Step 10: buildCorrectionFormUrl ──');
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const formId = props.getProperty('CORRECTION_FORM_ID');
+    if (formId) {
+      const url = buildCorrectionFormUrl(TEST_EMPLOYEE_1, today, TEST_BRANCH);
+      assert('Form URL is not empty',            url !== '', url);
+      assert('Form URL contains employee name',  url.indexOf(encodeURIComponent(TEST_EMPLOYEE_1)) !== -1, url);
+      assert('Form URL contains date',           url.indexOf(encodeURIComponent(today)) !== -1, url);
+      assert('Form URL contains branch',         url.indexOf(encodeURIComponent(TEST_BRANCH)) !== -1, url);
+      Logger.log('  URL: ' + url);
+    } else {
+      Logger.log('  (Correction form not created yet — run createCorrectionForm() first. Skipping.)');
+    }
+  } catch(e) {
+    assert('buildCorrectionFormUrl', false, e.message);
+  }
+
+  // ── STEP 11: Missed clock-out simulation ──────────────────
+  Logger.log('');
+  Logger.log('── Step 11: Missed clock-out flow ──');
+  try {
+    // Clock in Employee 1 again (fresh row), don't clock out
+    // First need to clear the duplicate guard by using a different "date"
+    // We'll directly write a row to simulate an open clock-in
+    const empTab = getOrCreateEmployeeTab(monthly, TEST_EMPLOYEE_1);
+    const fakeClockIn = new Date(now.getTime() - 10 * 60 * 60 * 1000); // 10 hrs ago
+    const fakeDate = Utilities.formatDate(fakeClockIn, tz, 'MM/dd/yyyy');
+    const fakeTime = Utilities.formatDate(fakeClockIn, tz, 'hh:mm:ss a');
+    // Only add if we haven't already (avoid duplicate test rows)
+    empTab.appendRow([fakeDate, fakeTime, '', '', '', '', '']);
+
+    // Verify the open row exists
+    const openData = empTab.getDataRange().getValues();
+    let hasOpenRow = false;
+    for (let i = 1; i < openData.length; i++) {
+      const rd = openData[i][0] instanceof Date
+        ? Utilities.formatDate(openData[i][0], tz, 'MM/dd/yyyy')
+        : String(openData[i][0]).trim();
+      if (rd === fakeDate && String(openData[i][2]).trim() === '') hasOpenRow = true;
+    }
+    assert('Open clock-in row exists for missed test', hasOpenRow);
+
+    // Test email map building
+    const master2    = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
+    const emailMap   = {};
+    getBranchSheets(master2).forEach(function(sheet) {
+      const d = sheet.getDataRange().getValues();
+      for (let i = 1; i < d.length; i++) {
+        const n = String(d[i][0]).trim();
+        const e = String(d[i][2]).trim();
+        if (n && e && e.indexOf('@') !== -1) emailMap[n] = e;
+      }
+    });
+    assert('Email found for TEST Alice', emailMap[TEST_EMPLOYEE_1] === TEST_EMAIL_1, emailMap[TEST_EMPLOYEE_1]);
+    assert('Email found for TEST Bob',   emailMap[TEST_EMPLOYEE_2] === TEST_EMAIL_2, emailMap[TEST_EMPLOYEE_2]);
+  } catch(e) {
+    assert('Missed clock-out flow', false, e.message);
+  }
+
+  // ── STEP 12: Cleanup ───────────────────────────────────────
+  Logger.log('');
+  Logger.log('── Step 12: Cleanup ──');
   try {
     // Delete test branch tab from master sheet
     const master    = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
@@ -1042,4 +1541,3 @@ function runFullTest() {
     Logger.log('All tests passed. Safe to deploy.');
   }
 }
-
