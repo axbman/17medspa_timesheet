@@ -215,11 +215,10 @@
 <script>
   // ── Supabase config ─────────────────────────────────────────
   const SUPABASE_URL = 'https://iifkbqjxolndaehkyasc.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_9kvTYF8oKmDgA5mFgCGkDA_Qf6wIUd';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpZmticWp4b2xuZGFlaGt5YXNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODcyNTEsImV4cCI6MjEwNTE2MzI1MX0.SXhBVlV4l7q4TAdoOQPW1wb1dKUmp-IZ30ZHnIjkzhc';
   const API = SUPABASE_URL + '/rest/v1';
   const HEADERS = {
     'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer ' + SUPABASE_KEY,
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
@@ -233,16 +232,61 @@
   let LOCATIONS = [];
 
   // ── Supabase REST helper ────────────────────────────────────
+  // Provides detailed errors so browser/network, HTTP, and Supabase
+  // permission/query failures are distinguishable.
   async function sb(method, path, body) {
-    const opts = { method, headers: HEADERS };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(API + path, opts);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || err.msg || 'API error ' + res.status);
+    const url = API + path;
+    const opts = {
+      method,
+      headers: HEADERS,
+      mode: 'cors',
+      cache: 'no-store'
+    };
+
+    if (body !== undefined && body !== null) {
+      opts.body = JSON.stringify(body);
     }
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
+
+    let res;
+    let raw = '';
+
+    try {
+      res = await fetch(url, opts);
+      raw = await res.text();
+    } catch (err) {
+      const detail = err && err.message ? err.message : String(err);
+      throw new Error(
+        'Network request failed. ' +
+        'Could not reach Supabase at ' + SUPABASE_URL +
+        '. Browser error: ' + detail +
+        '. Check your internet connection, Supabase URL, CORS, and browser console.'
+      );
+    }
+
+    if (!res.ok) {
+      let detail = raw;
+      try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        detail = parsed.message || parsed.msg || parsed.error_description ||
+                 parsed.error || raw;
+      } catch (_) {}
+
+      throw new Error(
+        'Supabase API error ' + res.status + ' ' + res.statusText +
+        (detail ? ': ' + detail : '')
+      );
+    }
+
+    if (!raw) return null;
+
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      throw new Error(
+        'Supabase returned invalid JSON (HTTP ' + res.status + '): ' +
+        raw.slice(0, 300)
+      );
+    }
   }
 
   // ── Load geofence locations on page load ────────────────────
@@ -252,7 +296,10 @@
       LOCATIONS = (rows || []).filter(r => r.latitude && r.longitude).map(r => ({
         name: r.name, lat: r.latitude, lng: r.longitude, radius: r.radius || 200
       }));
-    } catch(e) { console.log('Could not load locations:', e); }
+    } catch(e) {
+      console.error('Could not load locations:', e);
+      setStatus('err', 'Could not load branch locations: ' + (e.message || String(e)));
+    }
   }
   loadLocations();
 
@@ -328,14 +375,16 @@
     setStatus('loading', '<span class="spinner"></span> Verifying...');
 
     try {
-      // Query employees table — join branch name
+      // Query employees table using the current employees schema.
+      // Columns: id, first_name, last_name, branch_id, remote, pin, email
+      // Branch name is read through the existing branches relationship.
       const rows = await sb('GET',
-        '/employees?select=id,name,branch_id,branches(name)&pin=eq.' + encodeURIComponent(pin)
+        '/employees?select=id,first_name,last_name,branch_id,remote,pin,email,branches(name)&pin=eq.' + encodeURIComponent(pin)
       );
 
       if (rows && rows.length > 0) {
         const emp = rows[0];
-        verifiedName       = emp.name;
+        verifiedName       = [emp.first_name, emp.last_name].filter(Boolean).join(' ');
         verifiedEmployeeId = emp.id;
         verifiedBranchId   = emp.branch_id;
         verifiedBranch     = emp.branches ? emp.branches.name : '';
@@ -358,9 +407,15 @@
         setTimeout(() => { pin = ''; busy = false; updateDots(); setStatus('', 'Enter your 6-digit PIN.'); }, 1200);
       }
     } catch (err) {
+      console.error('PIN verification failed:', err);
       updateDots('error');
-      setStatus('err', 'Network error. Try again.');
-      setTimeout(() => { pin = ''; busy = false; updateDots(); setStatus('', 'Enter your 6-digit PIN.'); }, 1200);
+      setStatus('err', 'Supabase error: ' + (err.message || String(err)));
+      setTimeout(() => {
+        pin = '';
+        busy = false;
+        updateDots();
+        setStatus('', 'Enter your 6-digit PIN.');
+      }, 5000);
     }
   }
 
@@ -381,7 +436,10 @@
           setClockBadge('OUT', p.clock_out);
         }
       }
-    } catch(e) { /* badge stays grey */ }
+    } catch(e) {
+      console.error('Could not load clock status:', e);
+      // Badge stays grey, but the exact API error is available in DevTools.
+    }
   }
 
   // ── Format time for display ─────────────────────────────────
