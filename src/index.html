@@ -215,7 +215,7 @@
 <script>
   // ── Supabase config ─────────────────────────────────────────
   const SUPABASE_URL = 'https://iifkbqjxolndaehkyasc.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpZmticWp4b2xuZGFlaGt5YXNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODcyNTEsImV4cCI6MjEwNTE2MzI1MX0.SXhBVlV4l7q4TAdoOQPW1wb1dKUmp-IZ30ZHnIjkzhc';
+  const SUPABASE_KEY = 'sb_publishable_9kvTYF8oKmDgA5mFgCGkDA_Qf6wIUd';
   const API = SUPABASE_URL + '/rest/v1';
   const HEADERS = {
     'apikey': SUPABASE_KEY,
@@ -229,7 +229,6 @@
   let verifiedBranch = '';
   let verifiedEmployeeId = null;
   let verifiedBranchId = null;
-  let verifiedRemote = false;
   let busy = false;
   let LOCATIONS = [];
 
@@ -331,7 +330,7 @@
     try {
       // Query employees table — join branch name
       const rows = await sb('GET',
-        '/employees?select=id,name,branch_id,remote,branches(name)&pin=eq.' + encodeURIComponent(pin)
+        '/employees?select=id,name,branch_id,branches(name)&pin=eq.' + encodeURIComponent(pin)
       );
 
       if (rows && rows.length > 0) {
@@ -340,7 +339,6 @@
         verifiedEmployeeId = emp.id;
         verifiedBranchId   = emp.branch_id;
         verifiedBranch     = emp.branches ? emp.branches.name : '';
-        verifiedRemote     = emp.remote === true;
 
         updateDots('ok');
         setStatus('ok', 'PIN accepted — ' + verifiedName);
@@ -402,15 +400,13 @@
   async function punch(type) {
     busy = true;
 
-    // Geofence check — skip for remote employees
-    if (!verifiedRemote) {
-      setStatus('loading', '<span class="spinner"></span> Checking location...');
-      const geoError = await checkGeofence(verifiedBranch);
-      if (geoError) {
-        setStatus('err', geoError);
-        busy = false;
-        return;
-      }
+    // Geofence check
+    setStatus('loading', '<span class="spinner"></span> Checking location...');
+    const geoError = await checkGeofence(verifiedBranch);
+    if (geoError) {
+      setStatus('err', geoError);
+      busy = false;
+      return;
     }
 
     // Capture time on employee's phone
@@ -493,7 +489,7 @@
   // ── Reset ───────────────────────────────────────────────────
   function resetToPin() {
     pin = ''; busy = false; verifiedName = ''; verifiedBranch = '';
-    verifiedEmployeeId = null; verifiedBranchId = null; verifiedRemote = false;
+    verifiedEmployeeId = null; verifiedBranchId = null;
     document.getElementById('screen-pin').style.display = '';
     document.getElementById('screen-confirm').classList.remove('active');
     updateDots();
