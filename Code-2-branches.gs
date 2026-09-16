@@ -25,7 +25,7 @@
 //    ...
 // ─────────────────────────────────────────────────────────────
 
-const MASTER_SPREADSHEET_ID = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
+const MASTER_SPREADSHEET_ID = '1yzY4MZcfkoifgdFq9jrwnx3JxvqnRpLhtsj93hTZNs4';
 const DRIVE_ROOT_FOLDER_ID  = '';          // optional; blank = My Drive root
 const BRANCH_TAB_PREFIX     = ''; // tabs are named directly, e.g. "Buena Park"
 const SUMMARY_SHEET         = 'Summary';
@@ -68,6 +68,11 @@ function doPost(e) {
       return respond(getLocations());
     }
 
+    if (action === 'getStatus') {
+      const status = getCurrentStatus((data.name || '').trim(), (data.branch || '').trim());
+      return respond({ currentStatus: status.type, lastPunchTime: status.time });
+    }
+
     return respond({ error: 'Unknown action' });
   } catch (err) {
     return respond({ error: err.message });
@@ -100,10 +105,7 @@ function verifyPin(pin) {
       const name   = String(data[i][0]).trim();
       const stored = String(data[i][1]).trim();
       if (name && stored && stored === String(pin).trim()) {
-        const status = getCurrentStatus(name, branchName);
-        return { success: true, name, branch: branchName,
-                 currentStatus: status.type,   // 'IN', 'OUT', or null
-                 lastPunchTime: status.time };  // e.g. "09:32:15 AM" or null
+        return { success: true, name, branch: branchName };
       }
     }
   }
@@ -199,16 +201,8 @@ function recordPunch(name, branch, type, clientTime) {
     }
 
     if (targetRow > 0) {
-      // Write clock-out time — formulas recalculate automatically
+      // Write clock-out time — ARRAYFORMULA recalculates hours automatically
       empTab.getRange(targetRow, 3).setValue(time);
-      // ARRAYFORMULA auto-recalculates
-      // Read back calculated values for OT highlighting
-      SpreadsheetApp.flush(); // force formula evaluation
-      const otVal = empTab.getRange(targetRow, 5).getValue();
-      if (otVal > 0) {
-        empTab.getRange(targetRow, 5).setBackground('#fff2cc').setFontColor('#7f6000');
-        empTab.getRange(targetRow, 7).setValue(Math.round(otVal * 10) / 10 + ' hrs OT');
-      }
       Logger.log('recordPunch OUT: wrote clock-out at ' + time + ' for row ' + targetRow);
     } else {
       Logger.log('recordPunch OUT: no open IN row found for ' + date);
@@ -510,20 +504,17 @@ function updateSummary(ss, name, type, date, time) {
       summary.getRange(i + 1, 2, 1, 6).setValues([[status, date, time, hrs.reg, hrs.ot, hrs.total]]);
       colorRow(summary, i + 1, type, isMissed);
       // Highlight OT cell if non-zero
-      if (hrs.ot > 0) summary.getRange(i + 1, 6).setBackground('#fff2cc').setFontColor('#7f6000');
       return;
     }
   }
   summary.appendRow([name, status, date, time, hrs.reg, hrs.ot, hrs.total]);
   colorRow(summary, summary.getLastRow(), type, isMissed);
-  if (hrs.ot > 0) summary.getRange(summary.getLastRow(), 6).setBackground('#fff2cc').setFontColor('#7f6000');
 }
 
 function colorRow(sheet, row, type, isMissed) {
   const cell = sheet.getRange(row, 2);
-  if (isMissed)                        cell.setBackground('#fff2cc').setFontColor('#7f6000');
-  else if (type.toLowerCase() === 'in') cell.setBackground('#d9ead3').setFontColor('#38761d');
-  else                                  cell.setBackground('#f4cccc').setFontColor('#cc0000');
+  if (type.toLowerCase() === 'in') cell.setBackground('#d9ead3').setFontColor('#38761d');
+  else                              cell.setBackground('#f4cccc').setFontColor('#cc0000');
 }
 
 // ── Midnight auto-check ───────────────────────────────────────
@@ -677,7 +668,6 @@ function onCorrectionFormSubmit(e) {
   SpreadsheetApp.flush(); // force formula evaluation
   const otVal = empSheet.getRange(targetRow, 5).getValue();
   if (otVal > 0) {
-    empSheet.getRange(targetRow, 5).setBackground('#fff2cc').setFontColor('#7f6000');
     empSheet.getRange(targetRow, 7).setValue('Corrected by employee | ' + Math.round(otVal * 10) / 10 + ' hrs OT');
   }
 
@@ -845,7 +835,6 @@ function checkMissedClockOuts() {
           sheet.getRange(i + 1, 3).setValue('11:59:00 PM');
           // ARRAYFORMULA auto-recalculates hours
           sheet.getRange(i + 1, 7).setValue('MISSED CLOCK-OUT');
-          sheet.getRange(i + 1, 7).setBackground('#fff2cc').setFontColor('#7f6000');
           updateSummary(monthly, name, 'out', checkDate, 'MISSED CLOCK-OUT');
           Logger.log('Missed clock-out logged for ' + name + ' (' + branch + ') on ' + checkDate);
         }
@@ -922,6 +911,8 @@ function setup() {
     // Sample row — edit with real coordinates
     locSheet.appendRow(['Buena Park', 34.04819, -118.26051, 200]);
     locSheet.appendRow(['Cupertino', 37.32299, -122.03218, 200]);
+    locSheet.appendRow(['Beverly Center', 34.0754, -118.3772, 200]);
+    
     Logger.log('Created Locations tab with sample data');
   }
 
@@ -1164,7 +1155,6 @@ function recalculateSummary() {
           statusCell.setBackground('#f4cccc').setFontColor('#cc0000');
         }
         if (hrs.ot > 0) {
-          summary.getRange(summaryRow, 6).setBackground('#fff2cc').setFontColor('#7f6000');
         }
 
         summaryRow++;

@@ -214,7 +214,7 @@
 
 <script>
   // ── IMPORTANT: replace with your deployed Apps Script URL ──
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbywAt5Ft7j6h4FKuIKLYX2epEDp6YHSzFaBIpG3e2LbY3Hiuso-_asYHPMY0iQjj_8nEQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyGI-YoYhtc-sr9rEzBv985yQcF7AOEOEyIQp3BCteYY2Ag6HsiMJevSKaqbG2lUF1bpQ/exec';
 
   // ── Geofence config ─────────────────────────────────────────
   // Locations are fetched from the "Locations" tab in the master sheet.
@@ -355,9 +355,18 @@
           document.getElementById('screen-pin').style.display = 'none';
           document.getElementById('confirm-name').textContent = verifiedName;
           document.getElementById('screen-confirm').classList.add('active');
-          setClockBadge(data.currentStatus, data.lastPunchTime);
+          setClockBadge(null, null); // show grey badge immediately
           setStatus('', 'Clock in or out below.');
-        }, 600);
+
+          // Load clock status in background — doesn't block the UI
+          fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'getStatus', name: verifiedName, branch: verifiedBranch })
+          }).then(r => r.json()).then(s => {
+            if (s.currentStatus) setClockBadge(s.currentStatus, s.lastPunchTime);
+          }).catch(() => {}); // silent fail — badge stays grey
+        }, 400);
       } else {
         updateDots('error');
         setStatus('err', '✗ ' + (data.error || 'Invalid PIN. Try again.'));
@@ -383,32 +392,36 @@
       return;
     }
 
-    setStatus('loading', '<span class="spinner"></span> Saving…');
+    // Capture time NOW on the employee's phone — before any server delay
+    const punchTime = new Date();
+    const displayTime = punchTime.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const displayDate = punchTime.toLocaleDateString('en-US');
 
+    // Show instant confirmation — don't wait for server
+    setStatus('ok',
+      (type === 'in' ? '✓ Clocked IN' : '✓ Clocked OUT') +
+      ' — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime
+    );
+    setTimeout(resetToPin, 2200);
+
+    // Save to server in background
     try {
       const res  = await fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'punch', name: verifiedName, type, clientTime: new Date().toISOString() })
+        body: JSON.stringify({ action: 'punch', name: verifiedName, type, clientTime: punchTime.toISOString() })
       });
       const data = await res.json();
 
-      if (data.success) {
-        setStatus('ok',
-          (type === 'in' ? '✓ Clocked IN' : '✓ Clocked OUT') +
-          ' — ' + verifiedName + '\n' + data.date + ' at ' + data.time
-        );
-        setTimeout(resetToPin, 2200);
-      } else if (data.duplicate) {
-        // Already clocked in / out — show warning, stay on confirm screen
+      if (data.duplicate) {
         setStatus('err', '⚠ ' + data.message);
         busy = false;
-      } else {
+      } else if (!data.success) {
         setStatus('err', 'Error: ' + (data.error || 'Unknown error'));
         busy = false;
       }
     } catch (err) {
-      setStatus('err', 'Network error — punch not saved. Try again.');
+      setStatus('err', 'Network error — punch may not have saved. Try again.');
       busy = false;
     }
   }
