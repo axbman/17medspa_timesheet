@@ -469,11 +469,21 @@
 
     // Capture time on employee's phone
     const now = new Date();
-    const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
-    const dateStr = now.toISOString().split('T')[0];  // YYYY-MM-DD
-    const displayTime = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    const displayDate = now.toLocaleDateString('en-US');
+    // 1. Get user local YYYY-MM-DD
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;  // Matches user's local date
 
+    // 2. Get user local HH:MM:SS (24-hour format)
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timeStr = `${hours}:${minutes}:${seconds}`; // Matches user's local time
+
+    // 3. User display formats (These naturally use the device's timezone)
+    const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const displayDate = now.toLocaleDateString('en-US');
     try {
       if (type === 'in') {
         // Check for existing open punch today
