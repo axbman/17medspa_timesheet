@@ -498,7 +498,7 @@
           '&clock_out=is.null&limit=1'
         );
         if (existing && existing.length > 0) {
-          setStatus('err', verifiedName + ' is jjjjjjalready clocked in today.');
+          setStatus('err', verifiedName + ' is already clocked in today.');
           busy = false;
           return;
         }
