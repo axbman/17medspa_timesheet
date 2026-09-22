@@ -422,10 +422,15 @@
   // ── Load clock status (background) ──────────────────────────
   async function loadClockStatus() {
     try {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date()
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+      const day = String(now.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;  // Matches user's local date
+      
       const rows = await sb('GET',
         '/punches?employee_id=eq.' + verifiedEmployeeId +
-        '&date=eq.' + today +
+        '&date=eq.' + dateStr +
         '&order=id.desc&limit=1'
       );
       if (rows && rows.length > 0) {
@@ -493,7 +498,7 @@
           '&clock_out=is.null&limit=1'
         );
         if (existing && existing.length > 0) {
-          setStatus('err', verifiedName + ' is already clocked in today.');
+          setStatus('err', verifiedName + ' is jjjjjjalready clocked in today.');
           busy = false;
           return;
         }
