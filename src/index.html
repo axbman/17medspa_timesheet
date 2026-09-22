@@ -422,15 +422,11 @@
   // ── Load clock status (background) ──────────────────────────
   async function loadClockStatus() {
     try {
-      const today = new Date()
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-      const day = String(now.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;  // Matches user's local date
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       
       const rows = await sb('GET',
         '/punches?employee_id=eq.' + verifiedEmployeeId +
-        '&date=eq.' + dateStr +
+        '&date=eq.' + today +
         '&order=id.desc&limit=1'
       );
       if (rows && rows.length > 0) {
