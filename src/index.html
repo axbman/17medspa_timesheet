@@ -203,7 +203,8 @@
         <button class="btn btn-in"  onclick="punch('in')">Clock In</button>
         <button class="btn btn-out" onclick="punch('out')">Clock Out</button>
       </div>
-      <button class="btn-cancel" onclick="resetToPin()">&#x2190; Back</button>
+
+      <button class="btn btn-cancel" onclick="signOut()"> Sign Out</button>
     </div>
 
     <div class="status loading" id="status">Enter your 6-digit PIN.</div>
@@ -396,10 +397,19 @@
           document.getElementById('confirm-name').textContent = verifiedName;
           document.getElementById('screen-confirm').classList.add('active');
           setClockBadge(null, null); // grey initially
-          setStatus('', 'Clock in or out below.');
+          setStatus('', 'Clock in or out below.');  
 
+          
+          localStorage.setItem('tc_eid', verifiedEmployeeId);
+          localStorage.setItem('tc_name', verifiedName);
+          localStorage.setItem('tc_branch', verifiedBranch);
+          localStorage.setItem('tc_branchId', verifiedBranchId);
           // Load status in background
           loadClockStatus();
+         // If arrived via QR, auto-punch after login
+          if (new URLSearchParams(window.location.search).get('action') === 'punch') {
+            setTimeout(autoTogglePunch, 600);
+          }
         }, 400);
       } else {
         updateDots('error');
@@ -422,7 +432,8 @@
   // ── Load clock status (background) ──────────────────────────
   async function loadClockStatus() {
     try {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
       
       const rows = await sb('GET',
         '/punches?employee_id=eq.' + verifiedEmployeeId +
@@ -485,6 +496,9 @@
     // 3. User display formats (These naturally use the device's timezone)
     const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const displayDate = now.toLocaleDateString('en-US');
+
+    console.log("time is", displayTime)
+    console.log("date is", displayDate)
     try {
       if (type === 'in') {
         // Check for existing open punch today
@@ -501,7 +515,7 @@
 
         // Show instant confirmation
         setStatus('ok', 'Clocked IN — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        setTimeout(resetToPin, 2200);
+        setTimeout(() => { busy = false; loadClockStatus(); setStatus('', 'Clock in or out below.'); }, 2200);
 
         // Insert in background
         await sb('POST', '/punches', {
@@ -537,7 +551,7 @@
 
         // Show instant confirmation
         setStatus('ok', 'Clocked OUT — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        setTimeout(resetToPin, 2200);
+        setTimeout(() => { busy = false; loadClockStatus(); setStatus('', 'Clock in or out below.'); }, 2200);
 
         // Update in background
         await sb('PATCH',
@@ -586,6 +600,64 @@
       badge.classList.add('badge-none');
       text.textContent = 'No punches today';
     }
+  }
+
+   // ── Sign out ───────────────────────────────────────────────
+  function signOut() {
+    localStorage.removeItem('tc_eid');
+    localStorage.removeItem('tc_name');
+    localStorage.removeItem('tc_branch');
+    localStorage.removeItem('tc_branchId');
+    resetToPin();
+  }
+
+  // ── Persistent login + QR auto-punch ──────────────────────
+  (function autoLogin() {
+    const savedId = localStorage.getItem('tc_eid');
+    if (savedId) {
+      verifiedEmployeeId = savedId;
+      verifiedName = localStorage.getItem('tc_name');
+      verifiedBranch = localStorage.getItem('tc_branch');
+      verifiedBranchId = localStorage.getItem('tc_branchId');
+      document.getElementById('screen-pin').style.display = 'none';
+      document.getElementById('confirm-name').textContent = verifiedName;
+      document.getElementById('screen-confirm').classList.add('active');
+      setStatus('', 'Clock in or out below.');
+      loadClockStatus();
+
+      // QR auto-punch: if URL has ?action=punch, toggle clock
+      if (new URLSearchParams(window.location.search).get('action') === 'punch') {
+        autoTogglePunch();
+      }
+    } else {
+      // Not logged in — if QR scanned, show PIN screen with message
+      if (new URLSearchParams(window.location.search).get('action') === 'punch') {
+        setStatus('', 'Enter your PIN to clock in/out.');
+      }
+    }
+  })();
+
+  // ── Auto-toggle punch (for QR) ────────────────────────────
+  async function autoTogglePunch() {
+    // Check if clocked in today
+    const now = new Date();
+    const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    try {
+      const rows = await sb('GET',
+        '/punches?employee_id=eq.' + verifiedEmployeeId +
+        '&date=eq.' + dateStr +
+        '&clock_out=is.null&limit=1'
+      );
+      if (rows && rows.length > 0) {
+        punch('out');  // has open punch → clock out
+      } else {
+        punch('in');   // no open punch → clock in
+      }
+    } catch(e) {
+      setStatus('err', 'Error: ' + e.message);
+    }
+    // Clean URL so refresh doesn't re-punch
+    window.history.replaceState({}, '', window.location.pathname);
   }
 </script>
 </body>
