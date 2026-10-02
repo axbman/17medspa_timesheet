@@ -199,10 +199,7 @@
         <span id="clock-status-text">No punches today</span>
       </div>
       <div class="confirm-sub">Choose an action below</div>
-      <div class="btn-row">
-        <button class="btn btn-in"  onclick="punch('in')">Clock In</button>
-        <button class="btn btn-out" onclick="punch('out')">Clock Out</button>
-      </div>
+      <button class="btn btn-in" id="punch-btn" onclick="doPunch()" style="width:100%;padding:15px;font-size:16px;">Clock In</button>
 
       <button class="btn btn-cancel" onclick="signOut()"> Sign Out</button>
     </div>
@@ -587,19 +584,38 @@
   }
 
   function setClockBadge(status, time) {
-    const badge = document.getElementById('clock-status-badge');
-    const text  = document.getElementById('clock-status-text');
-    badge.className = 'clock-status-badge';
-    if (status === 'IN') {
-      badge.classList.add('badge-in');
-      text.textContent = 'Clocked in' + (time ? ' at ' + fmtTime(time) : '');
-    } else if (status === 'OUT') {
-      badge.classList.add('badge-out');
-      text.textContent = 'Clocked out' + (time ? ' at ' + fmtTime(time) : '');
-    } else {
-      badge.classList.add('badge-none');
-      text.textContent = 'No punches today';
-    }
+      const badge = document.getElementById('clock-status-badge');
+      const text  = document.getElementById('clock-status-text');
+      const btn   = document.getElementById('punch-btn');
+      badge.className = 'clock-status-badge';
+      if (status === 'IN') {
+        badge.classList.add('badge-in');
+        text.textContent = 'Clocked in' + (time ? ' at ' + fmtTime(time) : '');
+        btn.textContent = 'Clock Out';
+        btn.className = 'btn btn-out';
+      } else if (status === 'OUT') {
+        badge.classList.add('badge-out');
+        text.textContent = 'Clocked out' + (time ? ' at ' + fmtTime(time) : '');
+        btn.textContent = 'Clock In';
+        btn.className = 'btn btn-in';
+      } else {
+        badge.classList.add('badge-none');
+        text.textContent = 'No punches today';
+        btn.textContent = 'Clock In';
+        btn.className = 'btn btn-in';
+      }
+      btn.style.width = '100%';
+      btn.style.padding = '15px';
+      btn.style.fontSize = '16px';
+  }
+
+    function doPunch() {
+      const btn = document.getElementById('punch-btn');
+      if (btn.textContent === 'Clock Out') {
+        punch('out');
+      } else {
+        punch('in');
+      }
   }
 
    // ── Sign out ───────────────────────────────────────────────
