@@ -136,6 +136,88 @@
   .badge-out .dot { background: var(--red); }
   .badge-none { background: var(--bg); color: var(--ink-3); border: 1px solid var(--rule); }
   .badge-none .dot { background: var(--ink-3); }
+  .badge-break { background: var(--amber-bg); color: var(--amber); border: 1px solid #fde68a; }
+  .badge-break .dot { background: var(--amber); }
+
+  /* ── Signed-in screen: map header + bottom sheet ── */
+  .card { position: relative; }
+  .card:has(#screen-confirm.active) { padding: 0; overflow: hidden; }
+  .card:has(#screen-confirm.active) .card-title { display: none; }
+  .card:has(#screen-confirm.active) .live-clock {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    margin: 0; z-index: 2; white-space: nowrap;
+    background: rgba(255,255,255,0.9); padding: 4px 10px; border-radius: 999px;
+  }
+  .card:has(#screen-confirm.active) .status { margin: 0 22px 22px; }
+  /* Bottom status bar hidden everywhere; only errors and "coming soon" notices still appear */
+  .status:not(.err):not(.info) { display: none; }
+  .status.info { background: var(--bg); color: var(--ink-2); border-color: var(--rule); }
+  /* Status badge hidden for now (still in the markup so it's easy to bring back) */
+  .clock-status-badge { display: none; }
+  .sheet .btn-cancel { margin-top: 16px; padding: 12px; font-size: 14px; }
+  .confirm { padding: 0; }
+
+  .map-hero { position: relative; height: 230px; background: #eef1f6; }
+  .map-svg  { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .geo-ring {
+    position: absolute; left: 50%; top: 54%; width: 150px; height: 150px;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    background: rgba(74,143,224,0.16); border: 1.5px solid rgba(74,143,224,0.38);
+  }
+  .avatar {
+    position: absolute; left: 50%; top: 54%; transform: translate(-50%, -50%);
+    width: 58px; height: 58px; border-radius: 50%;
+    background: var(--punch); color: #fff; border: 3px solid #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 18px; letter-spacing: 0.02em;
+  }
+  .sheet {
+    position: relative; margin-top: -26px; background: #fff;
+    border-radius: 26px 26px 0 0; padding: 20px 22px 22px;
+    box-shadow: 0 -6px 18px rgba(15,23,42,0.06);
+  }
+  .sheet .confirm-name { font-size: 18px; margin-bottom: 8px; }
+  .sheet .clock-status-badge { margin-bottom: 8px; }
+
+  .punch-circle {
+    width: 176px; height: 176px; border-radius: 50%; border: none;
+    margin: 6px auto 10px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px;
+    color: #fff; cursor: pointer; font-family: 'Inter', sans-serif;
+    transition: transform 0.1s, opacity 0.15s;
+  }
+  .punch-circle.in  { background: #4a8fe0; box-shadow: 0 10px 24px rgba(74,143,224,0.35); }
+  .punch-circle.out { background: var(--red); box-shadow: 0 10px 24px rgba(220,38,38,0.3); }
+  .punch-circle.break { background: #fbbf24; color: #1f2937; box-shadow: 0 10px 24px rgba(251,191,36,0.4); }
+  .punch-circle:hover  { opacity: 0.92; }
+  .punch-circle:active { transform: scale(0.96); }
+  .punch-label { font-size: 20px; font-weight: 500; }
+  .punch-timer { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-variant-numeric: tabular-nums; opacity: 0.95; }
+
+  .clock-caption { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); font-family: 'IBM Plex Mono', monospace; }
+  .clock-sub { font-size: 12px; color: var(--ink-2); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+
+  .pill-break {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 18px; border-radius: 12px;
+    border: 1px solid #d9cff5; background: #f6f2ff; color: #6d4fc2;
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
+    cursor: pointer; margin: 8px 0 16px; transition: transform 0.1s, opacity 0.15s;
+  }
+  .pill-break:active { transform: scale(0.96); }
+  .pill-break.active { background: #fbbf24; border-color: #f5a900; color: #1f2937; }
+
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .tile {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    padding: 18px 10px; border-radius: 16px; border: 1px solid var(--rule); background: #fff;
+    box-shadow: 0 2px 10px rgba(15,23,42,0.05);
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: var(--ink);
+  }
+  button.tile { cursor: pointer; }
+  button.tile:active { transform: scale(0.97); }
+  .tile-sub { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-2); margin-top: -4px; }
 
   /* ── Status ── */
   .status {
@@ -154,11 +236,96 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   footer { text-align: center; padding: 14px; font-size: 11px; color: var(--ink-3); }
+
+  /* ── Time off request sheet ── */
+  .to-backdrop { position: fixed; inset: 0; background: rgba(17,18,20,0.55); z-index: 200; display: none; align-items: flex-end; justify-content: center; }
+  .to-backdrop.open { display: flex; }
+  .to-sheet { width: 100%; max-width: 440px; max-height: 94vh; overflow-y: auto; background: #fff; border-radius: 22px 22px 0 0; animation: toUp .22s ease-out; }
+  @keyframes toUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .to-head { position: sticky; top: 0; z-index: 2; background: #fff; display: flex; align-items: center; justify-content: center; height: 56px; border-bottom: 1px solid var(--rule); font-size: 15px; font-weight: 500; }
+  .to-x { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; padding: 8px; cursor: pointer; color: var(--ink-2); display: flex; }
+  .to-row { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; min-height: 56px; border-bottom: 1px solid var(--rule); font-size: 16px; }
+  .to-link { color: #4a8fe0; background: none; border: none; font: inherit; cursor: pointer; padding: 6px 0; }
+  .to-balance-wrap { padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+  .to-balance { padding: 0 16px; height: 50px; border-radius: 12px; background: #eeeefc; display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+  .to-balance b { font-weight: 600; }
+  .switch { width: 52px; height: 32px; border-radius: 999px; border: none; background: #d4d7dd; position: relative; cursor: pointer; transition: background .15s; padding: 0; }
+  .switch .knob { position: absolute; top: 2px; left: 2px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .15s; }
+  .switch.on { background: #5fc15f; }
+  .switch.on .knob { transform: translateX(20px); }
+  .to-dates { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rule); font-size: 14px; }
+  .to-date { height: 50px; border: none; border-radius: 12px; background: var(--bg); font: 500 17px 'Inter', sans-serif; color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+  .to-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px 14px; border-bottom: 1px solid var(--rule); }
+  .to-times label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
+  .to-times input { height: 46px; border: none; border-radius: 12px; background: var(--bg); font: 500 16px 'Inter', sans-serif; padding: 0 12px; color: var(--ink); }
+  .to-total { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; min-height: 52px; background: #faf9fb; border-bottom: 1px solid var(--rule); font-size: 16px; }
+  .to-total span, .to-total b { font-weight: 600; }
+  .to-total b.neg { color: var(--red); }
+  .to-note { display: block; width: calc(100% - 32px); margin: 16px; height: 110px; resize: none; border: 1px solid var(--rule); border-radius: 12px; padding: 12px; font: 15px 'Inter', sans-serif; color: var(--ink); background: #fff; }
+  .to-note:focus { outline: none; border-color: #4a8fe0; }
+  .to-err { color: var(--red); font-size: 13px; padding: 0 20px; min-height: 0; }
+  .to-err:not(:empty) { padding-bottom: 8px; }
+  .to-actions { position: sticky; bottom: 0; background: #fff; display: flex; gap: 12px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .to-btn { height: 52px; border-radius: 999px; font: 500 17px 'Inter', sans-serif; cursor: pointer; }
+  .to-btn.cancel { flex: 0 0 auto; padding: 0 28px; background: #fff; border: 1px solid #d4d7dd; color: var(--ink-2); }
+  .to-btn.send { flex: 1; border: none; background: #4a8fe0; color: #fff; }
+  .to-btn.send:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Calendar / picker overlays (action-sheet style) ── */
+  .cal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; display: none; flex-direction: column; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .cal-backdrop.open { display: flex; }
+  .cal-card { width: 100%; max-width: 420px; background: #fff; border-radius: 18px; overflow: hidden; }
+  .cal-top { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px 6px; }
+  .cal-title { display: flex; align-items: center; gap: 6px; background: none; border: none; font: 600 17px 'Inter', sans-serif; color: var(--ink); cursor: pointer; padding: 4px 0; }
+  .cal-title svg { transition: transform .15s; }
+  .cal-title.open svg { transform: rotate(90deg); }
+  .cal-nav { display: flex; gap: 14px; }
+  .cal-nav button { background: none; border: none; color: #2f7bea; cursor: pointer; padding: 6px 8px; display: flex; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; padding: 0 12px 12px; text-align: center; }
+  .cal-grid.months { grid-template-columns: repeat(3, 1fr); row-gap: 8px; padding: 10px 16px 18px; }
+  .cal-dow { font-size: 12px; letter-spacing: .06em; color: var(--ink-3); padding: 10px 0; font-weight: 500; }
+  .cal-day { width: 44px; height: 44px; margin: 0 auto; border: none; background: none; border-radius: 50%; font: 18px 'Inter', sans-serif; color: var(--ink); cursor: pointer; }
+  .cal-day.today { color: #2f7bea; font-weight: 600; }
+  .cal-day.sel { background: #2f7bea; color: #fff; font-weight: 500; }
+  .cal-day:disabled { color: #c5c8ce; cursor: not-allowed; }
+  .cal-month { height: 44px; border: none; background: none; border-radius: 12px; font: 17px 'Inter', sans-serif; color: var(--ink); cursor: pointer; }
+  .cal-month.sel { background: #2f7bea; color: #fff; }
+  .cal-btn { display: block; width: 100%; border: none; background: #fff; color: #2f7bea; font: 18px 'Inter', sans-serif; padding: 16px; cursor: pointer; }
+  .cal-btn + .cal-btn, .cal-confirm { border-top: 1px solid var(--rule); }
+  .cal-btn.cur { font-weight: 600; }
+  .cal-btn.strong { font-weight: 600; }
+
+  /* ── My timesheet sheet ── */
+  .ts-dates { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 14px 16px 8px; font-size: 14px; }
+  input.ts-date { -webkit-appearance: none; appearance: none; width: 100%; min-width: 0; height: 50px; padding: 0 8px; border: none; border-radius: 12px; background: var(--bg); font: 500 16px 'Inter', sans-serif; color: var(--ink); text-align: center; font-variant-numeric: tabular-nums; cursor: pointer; }
+  input.ts-date:focus { outline: 2px solid #4a8fe0; outline-offset: 1px; }
+  .ts-chips { display: flex; gap: 8px; padding: 4px 16px 14px; border-bottom: 1px solid var(--rule); }
+  .ts-chip { border: 1px solid var(--rule); background: #fff; border-radius: 999px; padding: 7px 14px; font: 500 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+  .ts-chip.on { background: #eaf3fe; border-color: #bcd7f7; color: #2f7bea; }
+  .ts-total { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; min-height: 58px; background: #eeeefc; font-size: 15px; }
+  .ts-total b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ts-stats { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--rule); }
+  .ts-stat { padding: 14px 4px; text-align: center; border-right: 1px solid var(--rule); }
+  .ts-stat:last-child { border-right: none; }
+  .ts-stat b { display: block; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ts-stat span { display: block; margin-top: 2px; font-size: 11px; line-height: 1.25; color: var(--ink-3); }
+  .ts-note { margin: 12px 16px 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; }
+  .ts-note.warn { background: var(--amber-bg); color: #8a6a00; }
+  .ts-note.info { background: var(--bg); color: var(--ink-2); }
+  .ts-list { padding: 8px 0 calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .ts-day { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--rule); font-size: 14px; }
+  .ts-day:first-child { border-top: none; }
+  .ts-d b { display: block; font-weight: 600; }
+  .ts-d span { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .ts-t { font-variant-numeric: tabular-nums; }
+  .ts-t small, .ts-h small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+  .ts-h { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ts-h small { font-weight: 500; }
+  .ts-h small.ok { color: var(--green); } .ts-h small.bad { color: var(--red); } .ts-h small.prog { color: var(--amber); }
+  .ts-empty { padding: 36px 20px; text-align: center; font-size: 14px; color: var(--ink-3); }
 </style>
 </head>
 <body>
-
-<nav><div class="logo">TIME<span>CLOCK</span></div></nav>
 
 <main>
   <div class="card">
@@ -193,20 +360,156 @@
 
     <!-- Confirm screen -->
     <div class="confirm" id="screen-confirm">
-      <div class="confirm-name" id="confirm-name"></div>
-      <div id="clock-status-badge" class="clock-status-badge badge-none">
-        <span class="dot"></span>
-        <span id="clock-status-text">No punches today</span>
+
+      <!-- Map header: branch location ring + employee avatar -->
+      <div class="map-hero">
+        <svg class="map-svg" viewBox="0 0 380 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect width="380" height="230" fill="#eef1f6"/>
+          <polygon points="255,0 380,0 380,72 305,42" fill="#cfe5e2"/>
+          <polygon points="0,150 72,118 112,170 40,212" fill="#e2e7ef"/>
+          <polygon points="300,175 380,150 380,230 330,230" fill="#e2e7ef"/>
+          <g stroke="#ffffff" stroke-linecap="round" fill="none">
+            <path d="M-10 62 L390 228" stroke-width="10"/>
+            <path d="M60 -10 L250 240" stroke-width="8"/>
+            <path d="M-10 198 L390 22" stroke-width="7"/>
+            <path d="M150 -10 L390 150" stroke-width="5"/>
+            <path d="M0 112 L380 112" stroke-width="4"/>
+            <path d="M300 -10 L300 240" stroke-width="4"/>
+            <path d="M-10 20 L200 240" stroke-width="3"/>
+          </g>
+        </svg>
+        <div class="geo-ring"></div>
+        <div class="avatar" id="avatar">?</div>
       </div>
-      <div class="confirm-sub">Choose an action below</div>
-      <button class="btn btn-in" id="punch-btn" onclick="doPunch()" style="width:100%;padding:15px;font-size:16px;">Clock In</button>
 
-      <button class="btn btn-cancel" onclick="signOut()"> Sign Out</button>
+      <div class="sheet">
+        <div class="confirm-name" id="confirm-name"></div>
+        <div id="clock-status-badge" class="clock-status-badge badge-none">
+          <span class="dot"></span>
+          <span id="clock-status-text">No punches today</span>
+        </div>
+
+        <!-- Big round punch button (live timer sits inside while clocked in) -->
+        <button class="punch-circle in" id="punch-btn" data-action="in" onclick="doPunch()">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4"/><path d="M12 2v3"/><circle cx="12" cy="14" r="7.5"/><path d="M12 14V10"/></svg>
+          <span class="punch-label" id="punch-label">Clock in</span>
+          <span id="workClock" class="punch-timer" style="display:none;">00:00:00</span>
+        </button>
+
+        <div id="workClockLabel" class="clock-caption" style="display:none;">Time worked</div>
+        <div id="workSub" class="clock-sub" style="display:none;"></div>
+
+        <button class="pill-break" id="break-btn" onclick="toggleBreak()" style="display:none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l2.5 1.5"/><path d="M5 3.5 2.5 6"/><path d="M19 3.5 21.5 6"/></svg>
+          <span id="break-label">Start break</span>
+        </button>
+
+        <div class="tiles">
+          <button class="tile" onclick="openTimeOff()">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4a8fe0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <span>Request time off</span>
+          </button>
+          <button class="tile" onclick="openTimesheet()">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4a8fe0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M8 14h2M12 14h2M8 17h2"/></svg>
+            <span>My timesheet</span>
+          </button>
+        </div>
+
+        <button class="btn btn-cancel" onclick="signOut()">Sign out</button>
+      </div>
     </div>
-
     <div class="status loading" id="status">Enter your 6-digit PIN.</div>
   </div>
 </main>
+
+<!-- Time off request sheet -->
+<div class="to-backdrop" id="to-backdrop">
+  <div class="to-sheet" role="dialog" aria-modal="true" aria-labelledby="to-title">
+    <div class="to-head">
+      <button class="to-x" onclick="closeTimeOff()" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+      <span id="to-title">Time off request</span>
+    </div>
+
+    <div class="to-row"><span>Type</span><button class="to-link" id="to-type" onclick="openTypePicker()">Vacation</button></div>
+    <div class="to-balance-wrap" id="to-balance-wrap">
+      <div class="to-balance"><span>Balance left in your policy</span><b id="to-balance">—</b></div>
+    </div>
+
+    <div class="to-row"><span>All day</span>
+      <button class="switch on" id="to-allday" role="switch" aria-checked="true" onclick="torToggleAllDay()"><span class="knob"></span></button>
+    </div>
+
+    <div class="to-dates">
+      <button class="to-date" id="to-from" onclick="openCal('start')"></button>
+      <span>To</span>
+      <button class="to-date" id="to-until" onclick="openCal('end')"></button>
+    </div>
+    <div class="to-times" id="to-times" style="display:none;">
+      <label>From<input type="time" id="to-t1" value="09:00" oninput="torTime()"></label>
+      <label>To<input type="time" id="to-t2" value="17:00" oninput="torTime()"></label>
+    </div>
+
+    <div class="to-total"><span>Total time requested</span><b id="to-hours">0 Work hours</b></div>
+    <div class="to-total" id="to-after-row"><span>Balance after approval</span><b id="to-after">—</b></div>
+
+    <textarea class="to-note" id="to-note" placeholder="Please explain your request (optional)"></textarea>
+    <div class="to-err" id="to-err"></div>
+
+    <div class="to-actions">
+      <button class="to-btn cancel" onclick="closeTimeOff()">Cancel</button>
+      <button class="to-btn send" id="to-send" onclick="submitTimeOff()">Send for approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- My timesheet sheet -->
+<div class="to-backdrop" id="ts-backdrop" onclick="if(event.target===this)closeTimesheet()">
+  <div class="to-sheet" role="dialog" aria-modal="true" aria-labelledby="ts-title">
+    <div class="to-head">
+      <button class="to-x" onclick="closeTimesheet()" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+      <span id="ts-title">My timesheet</span>
+    </div>
+    <div class="ts-dates">
+      <input class="ts-date" type="date" id="ts-from" aria-label="From date">
+      <span>To</span>
+      <input class="ts-date" type="date" id="ts-to" aria-label="To date">
+    </div>
+    <div class="ts-chips">
+      <button class="ts-chip" id="ts-p-this" onclick="tsPreset(0)">This period</button>
+      <button class="ts-chip" id="ts-p-last" onclick="tsPreset(-1)">Last period</button>
+    </div>
+    <div id="ts-body"></div>
+  </div>
+</div>
+
+<!-- Type picker -->
+<div class="cal-backdrop" id="type-backdrop" onclick="if(event.target===this)closeTypePicker()">
+  <div class="cal-card" id="type-list"></div>
+  <div class="cal-card"><button class="cal-btn strong" onclick="closeTypePicker()">Cancel</button></div>
+</div>
+
+<!-- Calendar -->
+<div class="cal-backdrop" id="cal-backdrop" onclick="if(event.target===this)closeCal()">
+  <div class="cal-card">
+    <div class="cal-top">
+      <button class="cal-title" id="cal-title" onclick="calToggleMode()">
+        <span id="cal-title-text"></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2f7bea" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <div class="cal-nav">
+        <button onclick="calNav(-1)" aria-label="Previous"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button onclick="calNav(1)" aria-label="Next"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <button class="cal-btn cal-confirm" onclick="calConfirm()">Confirm</button>
+  </div>
+  <div class="cal-card"><button class="cal-btn strong" onclick="closeCal()">Cancel</button></div>
+</div>
 
 <footer>Records sync in real time.</footer>
 
@@ -363,6 +666,8 @@
   }
 
   document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, textarea')) return;
+    if ((typeof tor !== 'undefined' && tor) || (typeof tsOpen !== 'undefined' && tsOpen)) return;
     if (e.key >= '0' && e.key <= '9') keyPress(e.key);
     else if (e.key === 'Backspace') keyDel();
   });
@@ -377,7 +682,7 @@
       // Columns: id, first_name, last_name, branch_id, remote, pin, email
       // Branch name is read through the existing branches relationship.
       const rows = await sb('GET',
-        '/employees?select=id,first_name,last_name,branch_id,remote,pin,email,branches(name)&pin=eq.' + encodeURIComponent(pin)
+        '/employees?select=id,first_name,last_name,branch_id,remote,pin,email,branches(name)&active=eq.true&pin=eq.' + encodeURIComponent(pin)
       );
 
       if (rows && rows.length > 0) {
@@ -427,7 +732,17 @@
   }
 
   // ── Load clock status (background) ──────────────────────────
+  function updateAvatar() {
+    const el = document.getElementById('avatar');
+    if (!el) return;
+    const parts = (verifiedName || '').trim().split(/\s+/).filter(Boolean);
+    el.textContent = parts.length
+      ? (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+      : '?';
+  }
+
   async function loadClockStatus() {
+    updateAvatar();
     try {
       const now = new Date();
       const today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
@@ -435,15 +750,25 @@
       const rows = await sb('GET',
         '/punches?employee_id=eq.' + verifiedEmployeeId +
         '&date=eq.' + today +
-        '&order=id.desc&limit=1'
+        '&order=id.desc'
       );
       if (rows && rows.length > 0) {
         const p = rows[0];
+        // Total break minutes saved across every punch from today
+        const dayBreakMin = rows.reduce((sum, r) => sum + (r.lunch_minutes || 0), 0);
         if (p.clock_in && !p.clock_out) {
-          setClockBadge('IN', p.clock_in);
+          // A break in progress is remembered on this device only (no extra DB column).
+          const onBreak = !!parseInt(localStorage.getItem('tc_break_' + p.id) || '', 10);
+          setClockBadge('IN', p.clock_in, onBreak);
+          // No timezone suffix: parsed as device-local time, matching how punch() saved it.
+          startWorkClock(p.date + 'T' + p.clock_in, p.lunch_minutes || 0, p.id, dayBreakMin);
         } else if (p.clock_in && p.clock_out) {
+          localStorage.removeItem('tc_break_' + p.id);
           setClockBadge('OUT', p.clock_out);
+          stopWorkClock();
         }
+      } else {
+        stopWorkClock();
       }
     } catch(e) {
       console.error('Could not load clock status:', e);
@@ -464,7 +789,13 @@
   }
 
   // ── Punch ───────────────────────────────────────────────────
+  let punching = false;
   async function punch(type) {
+    if (punching) return;          // ignore a second punch while one is in flight
+    punching = true;
+    try { await punchInner(type); } finally { punching = false; }
+  }
+  async function punchInner(type) {
     busy = true;
 
     // Geofence check
@@ -510,17 +841,16 @@
           return;
         }
 
-        // Show instant confirmation
-        setStatus('ok', 'Clocked IN — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        setTimeout(() => { busy = false; loadClockStatus(); setStatus('', 'Clock in or out below.'); }, 2200);
-
-        // Insert in background
+        // Wait for the database write BEFORE confirming and unlocking
         await sb('POST', '/punches', {
           employee_id: verifiedEmployeeId,
           date: dateStr,
           clock_in: timeStr,
           notes: ''
         });
+        setStatus('ok', 'Clocked IN — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
+        await loadClockStatus();
+        setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
 
       } else {
         // Find open punch to close
@@ -546,15 +876,23 @@
           return;
         }
 
-        // Show instant confirmation
-        setStatus('ok', 'Clocked OUT — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        setTimeout(() => { busy = false; loadClockStatus(); setStatus('', 'Clock in or out below.'); }, 2200);
+        // If a break is still running, close it and save its minutes with the clock-out
+        const bKey = 'tc_break_' + open[0].id;
+        const bStart = parseInt(localStorage.getItem(bKey) || '', 10);
+        const patch = { clock_out: timeStr };
+        if (bStart) {
+          patch.lunch_minutes = (open[0].lunch_minutes || 0) + Math.round((Date.now() - bStart) / 60000);
+        }
 
-        // Update in background
+        // Wait for the database write BEFORE confirming and unlocking
         await sb('PATCH',
           '/punches?id=eq.' + open[0].id,
-          { clock_out: timeStr }
+          patch
         );
+        localStorage.removeItem(bKey);
+        setStatus('ok', 'Clocked OUT — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
+        await loadClockStatus();
+        setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
       }
     } catch (err) {
       if (err.message && err.message.includes('duplicate')) {
@@ -568,6 +906,7 @@
 
   // ── Reset ───────────────────────────────────────────────────
   function resetToPin() {
+    stopWorkClock();
     pin = ''; busy = false; verifiedName = ''; verifiedBranch = '';
     verifiedEmployeeId = null; verifiedBranchId = null;
     document.getElementById('screen-pin').style.display = '';
@@ -583,35 +922,100 @@
     el.innerHTML = html;
   }
 
-  function setClockBadge(status, time) {
+  // Placeholder for features that aren't built yet
+  function comingSoon(feature) {
+    setStatus('info', feature + ' is coming soon.');
+    setTimeout(() => {
+      if (document.getElementById('status').classList.contains('info')) setStatus('', '');
+    }, 2500);
+  }
+
+  function setPunchBtn(action, onBreak) {
+    const btn = document.getElementById('punch-btn');
+    if (onBreak) {
+      btn.dataset.action = 'break';
+      btn.className = 'punch-circle break';
+      document.getElementById('punch-label').textContent = 'End Break';
+      return;
+    }
+    btn.dataset.action = action;               // the action the button will perform
+    btn.className = 'punch-circle ' + action;
+    document.getElementById('punch-label').textContent = action === 'out' ? 'Clock out' : 'Clock in';
+  }
+
+  function setClockBadge(status, time, onBreak) {
       const badge = document.getElementById('clock-status-badge');
       const text  = document.getElementById('clock-status-text');
       const btn   = document.getElementById('punch-btn');
+      const brk   = document.getElementById('break-btn');
       badge.className = 'clock-status-badge';
+      brk.style.display = (status === 'IN' && !onBreak) ? '' : 'none';  // hidden during a break
       if (status === 'IN') {
-        badge.classList.add('badge-in');
-        text.textContent = 'Clocked in' + (time ? ' at ' + fmtTime(time) : '');
-        btn.textContent = 'Clock Out';
-        btn.className = 'btn btn-out';
+        if (onBreak) {
+          badge.classList.add('badge-break');
+          text.textContent = 'On break';
+          document.getElementById('break-label').textContent = 'End break';
+          brk.classList.add('active');
+        } else {
+          badge.classList.add('badge-in');
+          text.textContent = 'Clocked in' + (time ? ' at ' + fmtTime(time) : '');
+          document.getElementById('break-label').textContent = 'Start break';
+          brk.classList.remove('active');
+        }
+        setPunchBtn('out', onBreak);
       } else if (status === 'OUT') {
         badge.classList.add('badge-out');
         text.textContent = 'Clocked out' + (time ? ' at ' + fmtTime(time) : '');
-        btn.textContent = 'Clock In';
-        btn.className = 'btn btn-in';
+        setPunchBtn('in');
       } else {
         badge.classList.add('badge-none');
         text.textContent = 'No punches today';
-        btn.textContent = 'Clock In';
-        btn.className = 'btn btn-in';
+        setPunchBtn('in');
       }
-      btn.style.width = '100%';
-      btn.style.padding = '15px';
-      btn.style.fontSize = '16px';
+  }
+
+  // ── Break (saves minutes to punches.lunch_minutes) ─────────
+  async function toggleBreak() {
+    if (busy) return;
+    busy = true;
+    const now = new Date();
+    const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    try {
+      const open = await sb('GET',
+        '/punches?employee_id=eq.' + verifiedEmployeeId +
+        '&date=eq.' + dateStr +
+        '&clock_out=is.null&order=id.desc&limit=1'
+      );
+      if (!open || open.length === 0) {
+        setStatus('err', verifiedName + ' is not clocked in.');
+        busy = false;
+        return;
+      }
+      const p = open[0];
+      const key = 'tc_break_' + p.id;
+      const started = parseInt(localStorage.getItem(key) || '', 10);
+      if (!started) {
+        localStorage.setItem(key, String(Date.now()));
+        setStatus('ok', 'Break started — ' + now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }));
+      } else {
+        const mins = Math.round((Date.now() - started) / 60000);
+        const total = (p.lunch_minutes || 0) + mins;
+        await sb('PATCH', '/punches?id=eq.' + p.id, { lunch_minutes: total });
+        localStorage.removeItem(key);
+        setStatus('ok', 'Break ended — ' + mins + ' min recorded\n' + total + ' min total today');
+      }
+      await loadClockStatus();
+    } catch (err) {
+      setStatus('err', 'Error: ' + err.message);
+    }
+    setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
   }
 
     function doPunch() {
+      if (busy) return;
       const btn = document.getElementById('punch-btn');
-      if (btn.textContent === 'Clock Out') {
+      if (btn.dataset.action === 'break') { toggleBreak(); return; }  // on a break: the circle ends it
+      if (btn.dataset.action === 'out') {
         punch('out');
       } else {
         punch('in');
@@ -627,6 +1031,14 @@
     resetToPin();
   }
 
+  // False only when the database says this employee is inactive (errors count as still active, so a hiccup never signs anyone out)
+  async function stillActive() {
+    try {
+      const r = await sb('GET', '/employees?select=id&active=eq.true&id=eq.' + encodeURIComponent(verifiedEmployeeId));
+      return Array.isArray(r) ? r.length > 0 : true;
+    } catch (e) { return true; }
+  }
+
   // ── Persistent login + QR auto-punch ──────────────────────
   (function autoLogin() {
     const savedId = localStorage.getItem('tc_eid');
@@ -639,12 +1051,16 @@
       document.getElementById('confirm-name').textContent = verifiedName;
       document.getElementById('screen-confirm').classList.add('active');
       setStatus('', 'Clock in or out below.');
-      loadClockStatus();
 
-      // QR auto-punch: if URL has ?action=punch, toggle clock
-      if (new URLSearchParams(window.location.search).get('action') === 'punch') {
-        autoTogglePunch();
-      }
+      // Make sure this person hasn't been made inactive since they last signed in
+      stillActive().then(ok => {
+        if (!ok) { signOut(); setStatus('err', 'This account is no longer active. Ask your manager.'); return; }
+        loadClockStatus();
+        // QR auto-punch: if URL has ?action=punch, toggle clock
+        if (new URLSearchParams(window.location.search).get('action') === 'punch') {
+          autoTogglePunch();
+        }
+      });
     } else {
       // Not logged in — if QR scanned, show PIN screen with message
       if (new URLSearchParams(window.location.search).get('action') === 'punch') {
@@ -655,6 +1071,15 @@
 
   // ── Auto-toggle punch (for QR) ────────────────────────────
   async function autoTogglePunch() {
+    // QR/NFC link opened repeatedly (or in several tabs): only act once per 30 s
+    try {
+      const last = +localStorage.getItem('tc_auto_ts') || 0;
+      if (Date.now() - last < 30000) {
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+      localStorage.setItem('tc_auto_ts', String(Date.now()));
+    } catch (e) {}
     // Check if clocked in today
     const now = new Date();
     const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
@@ -675,6 +1100,481 @@
     // Clean URL so refresh doesn't re-punch
     window.history.replaceState({}, '', window.location.pathname);
   }
+
+  let clockTimer = null;
+  let clockState = null; // { start, lunchMin, dayBreakMin, breakStart }
+
+  function fmtHMS(secs) {
+    if (secs < 0) secs = 0;
+    const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+    const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const s = String(secs % 60).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  // Normal: counts time worked (breaks already saved are subtracted).
+  // On break: the big clock counts total break time for the day (saved breaks + current one); worked time is shown paused underneath.
+  function renderWorkClock() {
+    if (!clockState) return;
+    const box   = document.getElementById('workClock');
+    const label = document.getElementById('workClockLabel');
+    const sub   = document.getElementById('workSub');
+    const now = Date.now();
+    const lunchSecs = clockState.lunchMin * 60;
+    if (clockState.breakStart) {
+      const worked = Math.floor((clockState.breakStart - clockState.start) / 1000) - lunchSecs;
+      label.style.display = 'block';
+      label.textContent = 'Total break time today';
+      label.style.color = 'var(--ink-3)';
+      box.textContent = fmtHMS(clockState.dayBreakMin * 60 + Math.floor((now - clockState.breakStart) / 1000));
+      sub.textContent = 'Time worked so far (paused): ' + fmtHMS(worked);
+    } else {
+      label.style.display = 'block';
+      label.textContent = 'Time worked';
+      label.style.color = 'var(--ink-3)';
+      box.textContent = fmtHMS(Math.floor((now - clockState.start) / 1000) - lunchSecs);
+      sub.textContent = '';
+    }
+  }
+
+  // clockInIso   = punch date + 'T' + clock_in, e.g. "2026-10-02T08:00:00" (device-local)
+  // lunchMinutes = break minutes already saved on this punch (punches.lunch_minutes)
+  // punchId      = used to find an in-progress break kept on this device
+  // dayBreakMin  = total break minutes saved today (all punches); the break counter starts from this
+  function startWorkClock(clockInIso, lunchMinutes, punchId, dayBreakMin) {
+    const bs = parseInt(localStorage.getItem('tc_break_' + punchId) || '', 10);
+    clockState = {
+      start: new Date(clockInIso).getTime(),
+      lunchMin: lunchMinutes || 0,
+      dayBreakMin: dayBreakMin || lunchMinutes || 0,
+      breakStart: bs || null
+    };
+    ['workClockLabel', 'workClock'].forEach(id => document.getElementById(id).style.display = 'block');
+    document.getElementById('workSub').style.display = 'block';
+    clearInterval(clockTimer);
+    renderWorkClock();
+    clockTimer = setInterval(renderWorkClock, 1000);
+  }
+
+  function stopWorkClock() {
+    clearInterval(clockTimer);
+    clockState = null;
+    ['workClockLabel', 'workClock', 'workSub'].forEach(id => document.getElementById(id).style.display = 'none');
+  }
+
+  // ── Time off request ───────────────────────────────────────
+  // Annual allowance per type, in hours (null = no balance tracked).
+  const TO_POLICIES  = { 'Vacation': 80, 'Sick Leave': 120, 'Personal': 40, 'Unpaid': null };
+  const TO_DAY_HOURS = 8;            // hours in a full work day
+  const TO_WORKDAYS  = [1,2,3,4,5];  // Mon–Fri
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  let tor = null;   // time-off request being edited
+  let cal = null;   // calendar state
+  let TO_TYPES = [];        // request types this employee may pick (set in openTimeOff)
+  let torOpening = false;   // guards against double-taps while eligibility loads
+
+  const el   = id => document.getElementById(id);
+  const pad2 = n => String(n).padStart(2, '0');
+  const ymd  = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  const dmy  = d => pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) + '/' + d.getFullYear();
+  const fmtH = n => String(Math.round(n * 100) / 100);
+
+  async function openTimeOff() {
+    if (!verifiedEmployeeId || tor || torOpening) return;
+    torOpening = true;
+    // Look up eligibility fresh each time so a change in the database applies to
+    // employees who stay signed in. Any failure = not eligible (Unpaid only).
+    let eligible = false;
+    try {
+      const r = await sb('GET', '/employees?select=pto_eligible&id=eq.' + encodeURIComponent(verifiedEmployeeId));
+      eligible = !!(r && r[0] && r[0].pto_eligible);
+    } catch (e) {
+      console.error('Could not check PTO eligibility:', e);
+    }
+    // Yearly hours are set by the manager (pto_policies table); keep the built-in numbers if it can't be read
+    try {
+      (await sb('GET', '/pto_policies?select=type,hours') || []).forEach(p => { if (p.type in TO_POLICIES && p.type !== 'Unpaid') TO_POLICIES[p.type] = Number(p.hours); });
+    } catch (e) { console.error('Could not load PTO policies:', e); }
+    torOpening = false;
+    if (!verifiedEmployeeId) return;   // signed out while the check was running
+    TO_TYPES = eligible ? Object.keys(TO_POLICIES) : ['Sick Leave', 'Unpaid'];   // sick leave is earned by everyone
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    tor = { type: TO_TYPES[0], allDay: true, start: t, end: new Date(t), used: 0, sickAccrued: 0, loading: false, sending: false, apiErr: '' };
+    el('to-note').value = '';
+    el('to-t1').value = '09:00';
+    el('to-t2').value = '17:00';
+    el('to-backdrop').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    renderTimeOff();
+    loadTimeOffUsed();
+  }
+
+  function closeTimeOff() {
+    el('to-backdrop').classList.remove('open');
+    document.body.style.overflow = '';
+    tor = null;
+  }
+
+  // Hours already requested (pending/approved) this calendar year for the chosen type
+  async function loadTimeOffUsed() {
+    const mine = tor, type = tor.type;
+    if (TO_POLICIES[type] == null && type !== 'Sick Leave') { tor.used = 0; tor.loading = false; renderTimeOff(); return; }
+    tor.loading = true; renderTimeOff();
+    if (type === 'Sick Leave') {
+      // Earned: 1 h per 30 h worked, max 56 h per year, carries over (calculated in the database)
+      try {
+        const r = await sb('POST', '/rpc/sick_balances', { p_emp: Number(verifiedEmployeeId) });
+        if (tor !== mine || tor.type !== type) return;
+        const b = (r && r[0]) || {};
+        tor.sickAccrued = Number(b.accrued || 0);
+        tor.used = Number(b.used_approved || 0) + Number(b.used_pending || 0);
+        tor.apiErr = '';
+      } catch (e) {
+        console.error('Could not load sick leave balance:', e);
+        if (tor !== mine || tor.type !== type) return;
+        tor.sickAccrued = 0; tor.used = 0;
+        tor.apiErr = 'Sick leave balance is unavailable right now.';
+      }
+      tor.loading = false; renderTimeOff(); return;
+    }
+    try {
+      const yr = new Date().getFullYear();
+      const rows = await sb('GET',
+        '/time_off_requests?select=hours&employee_id=eq.' + verifiedEmployeeId +
+        '&type=eq.' + encodeURIComponent(type) +
+        '&status=neq.rejected&start_date=gte.' + yr + '-01-01&start_date=lte.' + yr + '-12-31');
+      if (tor !== mine || tor.type !== type) return;
+      tor.used = (rows || []).reduce((s, r) => s + Number(r.hours || 0), 0);
+    } catch (e) {
+      console.error('Could not load time off balance:', e);
+      if (tor !== mine || tor.type !== type) return;
+      tor.used = 0;
+    }
+    tor.loading = false;
+    renderTimeOff();
+  }
+
+  function torHours() {
+    let days = 0;
+    for (let d = new Date(tor.start); d <= tor.end; d.setDate(d.getDate() + 1)) {
+      if (TO_WORKDAYS.includes(d.getDay())) days++;
+    }
+    if (tor.allDay) return days * TO_DAY_HOURS;
+    const a = el('to-t1').value, b = el('to-t2').value;
+    if (!a || !b) return 0;
+    const [sh, sm] = a.split(':').map(Number), [eh, em] = b.split(':').map(Number);
+    const per = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+    return per > 0 ? Math.round(days * per * 100) / 100 : 0;
+  }
+
+  function renderTimeOff() {
+    if (!tor) return;
+    const allowance = tor.type === 'Sick Leave' ? tor.sickAccrued : TO_POLICIES[tor.type];
+    const hasBal = allowance != null;
+    const hours = torHours();
+    const left = hasBal ? allowance - tor.used : 0;
+    const after = left - hours;
+
+    el('to-type').textContent = tor.type;
+    el('to-from').textContent = dmy(tor.start);
+    el('to-until').textContent = dmy(tor.end);
+    const sw = el('to-allday');
+    sw.classList.toggle('on', tor.allDay);
+    sw.setAttribute('aria-checked', String(tor.allDay));
+    el('to-times').style.display = tor.allDay ? 'none' : 'grid';
+
+    el('to-balance-wrap').style.display = hasBal ? '' : 'none';
+    el('to-after-row').style.display = hasBal ? '' : 'none';
+    el('to-balance').textContent = tor.loading ? '…' : fmtH(left) + ' hours';
+    el('to-hours').textContent = fmtH(hours) + (hours === 1 ? ' Work hour' : ' Work hours');
+    const afterEl = el('to-after');
+    afterEl.textContent = tor.loading ? '…' : fmtH(after) + ' hours';
+    afterEl.classList.toggle('neg', hasBal && !tor.loading && after < 0);
+
+    let msg = tor.apiErr;
+    if (!msg) {
+      if (hours <= 0) msg = tor.allDay ? 'The selected dates have no work days.' : 'End time must be after start time.';
+      else if (hasBal && !tor.loading && after < 0) msg = 'Not enough balance for this request.';
+    }
+    el('to-err').textContent = msg;
+    const send = el('to-send');
+    send.disabled = tor.sending || tor.loading || hours <= 0 || (hasBal && after < 0);
+    send.textContent = tor.sending ? 'Sending…' : 'Send for approval';
+  }
+
+  function torToggleAllDay() { tor.allDay = !tor.allDay; tor.apiErr = ''; renderTimeOff(); }
+  function torTime() { tor.apiErr = ''; renderTimeOff(); }
+
+  // ── Type picker ─────────────────────────────────────────────
+  function openTypePicker() {
+    el('type-list').innerHTML = TO_TYPES.map(t =>
+      '<button class="cal-btn' + (t === tor.type ? ' cur' : '') + '" onclick="pickType(\'' + t + '\')">' + t + '</button>'
+    ).join('');
+    el('type-backdrop').classList.add('open');
+  }
+  function closeTypePicker() { el('type-backdrop').classList.remove('open'); }
+  function pickType(t) {
+    closeTypePicker();
+    if (t === tor.type) return;
+    tor.type = t; tor.used = 0; tor.apiErr = '';
+    renderTimeOff();
+    loadTimeOffUsed();
+  }
+
+  // ── Calendar ────────────────────────────────────────────────
+  function openCal(target) {
+    const cur = target === 'start' ? tor.start : tor.end;
+    cal = { target, sel: new Date(cur), y: cur.getFullYear(), m: cur.getMonth(), mode: 'days',
+            min: target === 'end' ? new Date(tor.start) : null };
+    el('cal-backdrop').classList.add('open');
+    renderCal();
+  }
+  function closeCal() { el('cal-backdrop').classList.remove('open'); cal = null; }
+
+  function renderCal() {
+    const grid = el('cal-grid');
+    const title = el('cal-title');
+    title.classList.toggle('open', cal.mode === 'months');
+    if (cal.mode === 'months') {
+      el('cal-title-text').textContent = cal.y;
+      grid.className = 'cal-grid months';
+      grid.innerHTML = MONTHS.map((n, i) =>
+        '<button class="cal-month' + (i === cal.m ? ' sel' : '') + '" onclick="calMonth(' + i + ')">' + n.slice(0, 3) + '</button>'
+      ).join('');
+      return;
+    }
+    el('cal-title-text').textContent = MONTHS[cal.m] + ' ' + cal.y;
+    grid.className = 'cal-grid';
+    const first = new Date(cal.y, cal.m, 1).getDay();
+    const dim = new Date(cal.y, cal.m + 1, 0).getDate();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let h = DOW.map(d => '<div class="cal-dow">' + d + '</div>').join('');
+    for (let i = 0; i < first; i++) h += '<span></span>';
+    for (let d = 1; d <= dim; d++) {
+      const dt = new Date(cal.y, cal.m, d);
+      const dis = cal.min && dt < cal.min;
+      const sel = dt.getTime() === cal.sel.getTime();
+      const cls = 'cal-day' + (sel ? ' sel' : '') + (dt.getTime() === today.getTime() ? ' today' : '');
+      h += '<button class="' + cls + '"' + (dis ? ' disabled' : '') + ' onclick="calPick(' + d + ')">' + d + '</button>';
+    }
+    grid.innerHTML = h;
+  }
+
+  function calNav(dir) {
+    if (cal.mode === 'months') { cal.y += dir; }
+    else {
+      cal.m += dir;
+      if (cal.m < 0)  { cal.m = 11; cal.y--; }
+      if (cal.m > 11) { cal.m = 0;  cal.y++; }
+    }
+    renderCal();
+  }
+  function calToggleMode() { cal.mode = cal.mode === 'days' ? 'months' : 'days'; renderCal(); }
+  function calMonth(i) { cal.m = i; cal.mode = 'days'; renderCal(); }
+  function calPick(d) { cal.sel = new Date(cal.y, cal.m, d); renderCal(); }
+  function calConfirm() {
+    if (cal.target === 'start') {
+      tor.start = new Date(cal.sel);
+      if (tor.end < tor.start) tor.end = new Date(tor.start);
+    } else {
+      tor.end = new Date(cal.sel);
+    }
+    tor.apiErr = '';
+    closeCal();
+    renderTimeOff();
+  }
+
+  // ── Send for approval ───────────────────────────────────────
+  async function submitTimeOff() {
+    if (!tor || tor.sending) return;
+    const hours = torHours();
+    if (hours <= 0) return;
+    tor.sending = true; tor.apiErr = '';
+    renderTimeOff();
+    try {
+      await sb('POST', '/time_off_requests', {
+        employee_id: verifiedEmployeeId,
+        type: tor.type,
+        start_date: ymd(tor.start),
+        end_date: ymd(tor.end),
+        all_day: tor.allDay,
+        start_time: tor.allDay ? null : el('to-t1').value,
+        end_time: tor.allDay ? null : el('to-t2').value,
+        hours: hours,
+        note: el('to-note').value.trim() || null,
+        status: 'pending'
+      });
+      closeTimeOff();
+      setStatus('info', 'Time off request sent for approval.');
+      setTimeout(() => {
+        if (el('status').classList.contains('info')) setStatus('', '');
+      }, 2500);
+    } catch (e) {
+      tor.sending = false;
+      tor.apiErr = 'Could not send request: ' + (e.message || String(e));
+      renderTimeOff();
+    }
+  }
+
+    // ── My timesheet ───────────────────────────────────────────
+  // Same rules as the admin page: overtime = hours over 40 in a Mon–Sun week,
+  // breaks come from punches.lunch_minutes, approved time off is prorated by work days.
+  const TS_OT_WEEKLY = 40;
+  let tsOpen = false;
+  let tsSeq = 0;                       // ignores slow responses if the dates change quickly
+
+  const tsEsc   = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const tsParse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const tsSec   = t => { const [h, m, s] = String(t).split(':'); return (+h) * 3600 + (+m) * 60 + (+(s || 0)); };
+  const tsTime  = t => { if (!t) return '—'; let [h, m] = String(t).split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + pad2(m) + ' ' + ap; };
+  const tsWeekKey = s => { const d = tsParse(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
+  const tsWorkdays = (a, b) => { let n = 0; for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) if (TO_WORKDAYS.includes(d.getDay())) n++; return n; };
+
+  // Semi-monthly pay periods (1st–14th, 15th–end), as on the admin page.
+  // offset 0 = the period containing today, -1 = the one before it.
+  function tsPeriod(offset) {
+    const t = new Date(), y = t.getFullYear(), m = t.getMonth(), first = t.getDate() <= 14;
+    let a, b;
+    if (offset === -1) {
+      if (first) { a = new Date(y, m - 1, 15); b = new Date(y, m, 0); }
+      else       { a = new Date(y, m, 1);      b = new Date(y, m, 14); }
+    } else {
+      if (first) { a = new Date(y, m, 1);      b = new Date(y, m, 14); }
+      else       { a = new Date(y, m, 15);     b = new Date(y, m + 1, 0); }
+    }
+    return [ymd(a), ymd(b)];
+  }
+
+  function openTimesheet() {
+    if (!verifiedEmployeeId) return;
+    const [a, b] = tsPeriod(0);
+    el('ts-from').value = a; el('ts-to').value = b;
+    el('ts-backdrop').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    tsOpen = true;
+    loadTimesheet();
+  }
+
+  function closeTimesheet() {
+    el('ts-backdrop').classList.remove('open');
+    document.body.style.overflow = '';
+    tsOpen = false; tsSeq++;
+  }
+
+  function tsPreset(offset) {
+    const [a, b] = tsPeriod(offset);
+    el('ts-from').value = a; el('ts-to').value = b;
+    loadTimesheet();
+  }
+  el('ts-from').addEventListener('change', loadTimesheet);
+  el('ts-to').addEventListener('change', loadTimesheet);
+
+  const tsMsg = txt => '<div class="ts-empty">' + tsEsc(txt) + '</div>';
+
+  async function loadTimesheet() {
+    const from = el('ts-from').value, to = el('ts-to').value, body = el('ts-body');
+    const [ta, tb] = tsPeriod(0), [la, lb] = tsPeriod(-1);
+    el('ts-p-this').classList.toggle('on', from === ta && to === tb);
+    el('ts-p-last').classList.toggle('on', from === la && to === lb);
+    if (!from || !to) { body.innerHTML = tsMsg('Pick a start and end date.'); return; }
+    if (from > to)    { body.innerHTML = tsMsg('The end date must be on or after the start date.'); return; }
+    const id = encodeURIComponent(verifiedEmployeeId), seq = ++tsSeq;
+    body.innerHTML = '<div class="ts-empty"><span class="spinner"></span> Loading…</div>';
+    try {
+      const punches = await sb('GET',
+        '/punches?select=id,date,clock_in,clock_out,lunch_minutes,approved&employee_id=eq.' + id +
+        '&date=gte.' + from + '&date=lte.' + to + '&order=date.asc,clock_in.asc&limit=1000');
+      // Time off and manager adjustments are optional extras: if either can't load, the punches still show
+      let reqs = [], ovRows = [];
+      try {
+        reqs = await sb('GET', '/time_off_requests?select=type,start_date,end_date,hours&employee_id=eq.' + id +
+          '&status=eq.approved&end_date=gte.' + from + '&start_date=lte.' + to);
+      } catch (e) { console.error('Could not load approved time off:', e); }
+      try {
+        ovRows = await sb('GET', '/timesheet_overrides?select=field,value&employee_id=eq.' + id +
+          '&period_start=eq.' + from + '&period_end=eq.' + to);
+      } catch (e) { console.error('Could not load adjustments:', e); }
+      if (seq !== tsSeq || !tsOpen) return;
+      body.innerHTML = tsRender(punches || [], reqs || [], ovRows || [], from, to);
+    } catch (e) {
+      console.error('Could not load timesheet:', e);
+      if (seq !== tsSeq || !tsOpen) return;
+      body.innerHTML = tsMsg('Could not load your timesheet. ' + (e.message || ''));
+    }
+  }
+
+  function tsRender(punches, reqs, ovRows, from, to) {
+    const today = ymd(new Date());
+    let work = 0, brk = 0, missing = 0;
+    const weekly = {}, rows = [];
+
+    punches.forEach(p => {
+      const lunch = (p.lunch_minutes || 0) / 60;
+      brk += lunch;
+      let hrs = null, st, cls = '';
+      if (p.clock_in && p.clock_out) {
+        let d = tsSec(p.clock_out) - tsSec(p.clock_in); if (d < 0) d += 86400;
+        hrs = Math.max(0, d / 3600 - lunch);
+        work += hrs;
+        weekly[tsWeekKey(p.date)] = (weekly[tsWeekKey(p.date)] || 0) + hrs;
+        if (p.approved) { st = 'Approved'; cls = 'ok'; } else { st = 'Pending'; }
+      } else if (p.date < today) { st = 'Missing clock-out'; cls = 'bad'; missing++; }
+      else { st = 'In progress'; cls = 'prog'; }
+      rows.push({ date: p.date, inT: p.clock_in, outT: p.clock_out, mins: p.lunch_minutes || 0, hrs, st, cls });
+    });
+
+    let ot = Object.values(weekly).reduce((s, h) => s + Math.max(0, h - TS_OT_WEEKLY), 0);
+
+    // Approved time off, prorated to the chosen dates by work days
+    const f = tsParse(from), t = tsParse(to);
+    let paidAbs = 0, unpaidAbs = 0;
+    reqs.forEach(r => {
+      const rs = tsParse(r.start_date), re = tsParse(r.end_date), total = tsWorkdays(rs, re);
+      const a = rs > f ? rs : f, b = re < t ? re : t;
+      if (!total || a > b) return;
+      const h = Number(r.hours || 0) * tsWorkdays(a, b) / total;
+      if (r.type === 'Unpaid') unpaidAbs += h; else paidAbs += h;
+    });
+
+    // Manager adjustments saved for exactly this period replace the calculated values
+    const ov = {}; ovRows.forEach(o => { ov[o.field] = Number(o.value); });
+    const adjusted = ['work', 'break', 'overtime', 'absence'].some(k => ov[k] != null);
+    if (ov.work != null) work = ov.work;
+    if (ov.break != null) brk = ov.break;
+    if (ov.overtime != null) ot = ov.overtime;
+    if (ov.absence != null) { unpaidAbs = Math.min(unpaidAbs, ov.absence); paidAbs = ov.absence - unpaidAbs; }
+
+    let h = '<div class="ts-total"><span>Total paid hours</span><b>' + fmtH(work + paidAbs) + ' h</b></div>' +
+      '<div class="ts-stats">' +
+        '<div class="ts-stat"><b>' + fmtH(work) + '</b><span>Worked</span></div>' +
+        '<div class="ts-stat"><b>' + fmtH(ot) + '</b><span>Overtime</span></div>' +
+        '<div class="ts-stat"><b>' + fmtH(brk) + '</b><span>Unpaid breaks</span></div>' +
+        '<div class="ts-stat"><b>' + fmtH(paidAbs) + '</b><span>Paid time off</span></div>' +
+      '</div>';
+    if (missing) h += '<div class="ts-note warn">' + missing + (missing === 1 ? ' day is' : ' days are') + ' missing a clock-out, so those hours are not counted yet. Ask your manager to fix it.</div>';
+    if (adjusted) h += '<div class="ts-note info">These totals include adjustments made by your manager.</div>';
+
+    if (!rows.length) return h + '<div class="ts-empty">No punches in this date range.</div>';
+    let prev = '';
+    h += '<div class="ts-list">' + rows.map(r => {
+      const first = r.date !== prev; prev = r.date;
+      const d = tsParse(r.date);
+      return '<div class="ts-day"><div class="ts-d">' + (first ? '<b>' + d.toLocaleDateString('en-US', { weekday: 'short' }) + '</b><span>' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>' : '') + '</div>' +
+        '<div class="ts-t"><div>' + tsTime(r.inT) + ' – ' + tsTime(r.outT) + '</div>' + (r.mins ? '<small>' + r.mins + ' min break</small>' : '') + '</div>' +
+        '<div class="ts-h">' + (r.hrs == null ? '—' : fmtH(r.hrs) + ' h') + '<small class="' + r.cls + '">' + r.st + '</small></div></div>';
+    }).join('') + '</div>';
+    return h;
+  }
+
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (el('cal-backdrop').classList.contains('open')) closeCal();
+    else if (el('type-backdrop').classList.contains('open')) closeTypePicker();
+    else if (tsOpen) closeTimesheet();
+    else if (tor) closeTimeOff();
+  });
 </script>
 </body>
 </html>
