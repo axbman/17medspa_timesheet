@@ -532,7 +532,7 @@
   <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="sp-ring" cx="50" cy="50" r="44"/><path class="sp-check" d="M30 52 L44 66 L71 36"/></svg>
   <div class="sp-text" id="sp-text">Clock in Successful</div>
 </div></div>
-<footer>Records sync in real time. · build 2026-10-13e</footer>
+<footer>Records sync in real time. · build 2026-10-13f</footer>
 
 <script>
   // ── Supabase config ─────────────────────────────────────────
@@ -830,7 +830,7 @@
   let spTimer = null;
   function showSuccess(type) {
     const pop = document.getElementById('success-pop');
-    document.getElementById('sp-text').textContent = type === 'in' ? 'Clock in Successful' : 'Clock out Successful';
+    document.getElementById('sp-text').textContent = { in: 'Clock in Successful', out: 'Clock out Successful', bstart: 'Break Started', bend: 'Break Ended' }[type] || 'Done';
     pop.classList.remove('show'); void pop.offsetWidth;    // restart the animation
     pop.classList.add('show');
     clearTimeout(spTimer); spTimer = setTimeout(() => pop.classList.remove('show'), 1900);
@@ -1045,12 +1045,14 @@
       if (!started) {
         localStorage.setItem(key, String(Date.now()));
         setStatus('ok', 'Break started — ' + now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }));
+        showSuccess('bstart');
       } else {
         const mins = Math.round((Date.now() - started) / 60000);
         const total = (p.lunch_minutes || 0) + mins;
         await sb('PATCH', '/punches?id=eq.' + p.id, { lunch_minutes: total });
         localStorage.removeItem(key);
         setStatus('ok', 'Break ended — ' + mins + ' min recorded\n' + total + ' min total today');
+        showSuccess('bend');
       }
       await loadClockStatus();
     } catch (err) {
