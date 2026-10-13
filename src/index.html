@@ -235,6 +235,23 @@
   .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 5px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+
+  /* Success pop after a clock in / out */
+  #success-pop { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  #success-pop.show { display: flex; animation: spFade 1.9s ease forwards; }
+  #success-pop .sp-card { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 26px 34px 24px; border-radius: 24px; background: rgba(255,255,255,0.96); box-shadow: 0 18px 50px rgba(20,30,70,0.22); }
+  #success-pop svg { width: 92px; height: 92px; overflow: visible; }
+  #success-pop .sp-ring { fill: #e7f8ef; stroke: #34c27a; stroke-width: 3; transform-origin: 50% 50%; }
+  #success-pop.show .sp-ring { animation: spPop .42s cubic-bezier(.2,1.3,.4,1) both; }
+  #success-pop .sp-check { fill: none; stroke: #1fa863; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 48; stroke-dashoffset: 48; }
+  #success-pop.show .sp-check { animation: spDraw .38s .28s ease-out forwards; }
+  #success-pop .sp-text { font: 600 19px 'Inter', system-ui, sans-serif; color: #17804c; opacity: 0; }
+  #success-pop.show .sp-text { animation: spText .35s .5s ease-out forwards; }
+  @keyframes spPop  { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes spDraw { to { stroke-dashoffset: 0; } }
+  @keyframes spText { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes spFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #success-pop .sp-ring, #success-pop .sp-check, #success-pop .sp-text { animation: none !important; opacity: 1; stroke-dashoffset: 0; } }
   footer { text-align: center; padding: 14px; font-size: 11px; color: var(--ink-3); }
 
   /* ── Time off request sheet ── */
@@ -511,7 +528,11 @@
   <div class="cal-card"><button class="cal-btn strong" onclick="closeCal()">Cancel</button></div>
 </div>
 
-<footer>Records sync in real time.</footer>
+<div id="success-pop" role="status" aria-live="polite"><div class="sp-card">
+  <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="sp-ring" cx="50" cy="50" r="44"/><path class="sp-check" d="M30 52 L44 66 L71 36"/></svg>
+  <div class="sp-text" id="sp-text">Clock in Successful</div>
+</div></div>
+<footer>Records sync in real time. · build 2026-10-13e</footer>
 
 <script>
   // ── Supabase config ─────────────────────────────────────────
@@ -622,23 +643,49 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
-  function checkGeofence(branchName) {
+  // Location is slow indoors and the browser's permission prompt can take a while to appear,
+  // so: ask early (as soon as someone signs in), reuse a recent fix, and fall back to a
+  // slower high-accuracy reading instead of failing at the first timeout.
+  let lastFix = null;   // { lat, lng, t }
+  function getPos(opts) {
+    return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, opts));
+  }
+  function warmLocation() {
+    if (!navigator.geolocation || !LOCATIONS.find(l => l.name === verifiedBranch)) return;
+    getPos({ enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 })
+      .then(p => { lastFix = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() }; })
+      .catch(() => {});
+  }
+  async function checkGeofence(branchName) {
     const loc = LOCATIONS.find(l => l.name === branchName);
-    if (!loc) return Promise.resolve(null);
-    return new Promise(resolve => {
-      if (!navigator.geolocation) { resolve('Location not supported.'); return; }
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const d = getDistanceMeters(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng);
-          resolve(d <= loc.radius ? null : 'You must be at ' + branchName + '. (' + Math.round(d) + 'm away)');
-        },
-        err => {
-          const m = {1:'Location denied.',2:'Location unavailable.',3:'Location timed out.'};
-          resolve(m[err.code] || 'Location error.');
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
+    if (!loc) return null;
+    if (!navigator.geolocation) return 'Location not supported.';
+    const away = (la, ln) => getDistanceMeters(la, ln, loc.lat, loc.lng);
+    // A fix from the last two minutes that is inside the radius is good enough
+    if (lastFix && Date.now() - lastFix.t < 120000 && away(lastFix.lat, lastFix.lng) <= loc.radius) return null;
+    let lastD = null, lastErr = null;
+    const tries = [
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },   // quick: Wi-Fi / cell
+      { enableHighAccuracy: true,  timeout: 25000, maximumAge: 0 }        // slower: GPS
+    ];
+    for (const o of tries) {
+      try {
+        const p = await getPos(o);
+        lastFix = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() };
+        const d = away(lastFix.lat, lastFix.lng);
+        if (d <= loc.radius) return null;
+        lastD = d; lastErr = null;      // outside the radius: try the more accurate reading before refusing
+      } catch (err) {
+        lastErr = err;
+        if (err && err.code === 1) break;   // denied: retrying will not help
+      }
+    }
+    if (lastD != null && !lastErr) return 'You must be at ' + branchName + '. (' + Math.round(lastD) + 'm away)';
+    const c = lastErr && lastErr.code;
+    if (c === 1) return 'Location is blocked. Allow location for this site in your browser settings, then reload.';
+    if (c === 2) return 'Location unavailable. Turn on location services, then try again.';
+    if (c === 3) return 'Location timed out. Check that location is on, then try again.';
+    return lastD != null ? 'You must be at ' + branchName + '. (' + Math.round(lastD) + 'm away)' : 'Location error.';
   }
 
   // ── Keypad ──────────────────────────────────────────────────
@@ -699,6 +746,7 @@
           document.getElementById('confirm-name').textContent = verifiedName;
           document.getElementById('screen-confirm').classList.add('active');
           setClockBadge(null, null); // grey initially
+          busy = false;              // the PIN step is finished: the punch button must respond to the first tap
           setStatus('', 'Clock in or out below.');  
 
           
@@ -708,6 +756,7 @@
           localStorage.setItem('tc_branchId', verifiedBranchId);
           // Load status in background
           loadClockStatus();
+          warmLocation();
          // If arrived via QR, auto-punch after login
           if (new URLSearchParams(window.location.search).get('action') === 'punch') {
             setTimeout(autoTogglePunch, 600);
@@ -743,6 +792,7 @@
 
   async function loadClockStatus() {
     updateAvatar();
+    clockLoadFailed = false;
     try {
       const now = new Date();
       const today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
@@ -772,9 +822,26 @@
       }
     } catch(e) {
       console.error('Could not load clock status:', e);
+      clockLoadFailed = true;
       // Badge stays grey, but the exact API error is available in DevTools.
     }
   }
+
+  let spTimer = null;
+  function showSuccess(type) {
+    const pop = document.getElementById('success-pop');
+    document.getElementById('sp-text').textContent = type === 'in' ? 'Clock in Successful' : 'Clock out Successful';
+    pop.classList.remove('show'); void pop.offsetWidth;    // restart the animation
+    pop.classList.add('show');
+    clearTimeout(spTimer); spTimer = setTimeout(() => pop.classList.remove('show'), 1900);
+  }
+
+  // Refresh the badge from the database; try once more if the first read fails
+  async function refreshClockStatus() {
+    await loadClockStatus();
+    if (clockLoadFailed) { await new Promise(r => setTimeout(r, 1500)); await loadClockStatus(); }
+  }
+  let clockLoadFailed = false;
 
   // ── Format time for display ─────────────────────────────────
   function fmtTime(timeStr) {
@@ -798,49 +865,41 @@
   async function punchInner(type) {
     busy = true;
 
-    // Geofence check
-    setStatus('loading', '<span class="spinner"></span> Checking location...');
-    const geoError = await checkGeofence(verifiedBranch);
-    if (geoError) {
-      setStatus('err', geoError);
-      busy = false;
-      return;
-    }
-
-    // Capture time on employee's phone
+    // Stamp the time the moment the button is tapped (not after the location check finishes)
     const now = new Date();
-    // 1. Get user local YYYY-MM-DD
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;  // Matches user's local date
-
-    // 2. Get user local HH:MM:SS (24-hour format)
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const timeStr = `${hours}:${minutes}:${seconds}`; // Matches user's local time
-
-    // 3. User display formats (These naturally use the device's timezone)
+    const pad = n => String(n).padStart(2, '0');
+    const dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());   // device-local date
+    const timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
     const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const displayDate = now.toLocaleDateString('en-US');
 
-    console.log("time is", displayTime)
-    console.log("date is", displayDate)
-    try {
-      if (type === 'in') {
-        // Check for existing open punch today
-        const existing = await sb('GET',
-          '/punches?employee_id=eq.' + verifiedEmployeeId +
-          '&date=eq.' + dateStr +
-          '&clock_out=is.null&limit=1'
-        );
-        if (existing && existing.length > 0) {
-          setStatus('err', verifiedName + ' is already clocked in today.');
-          busy = false;
-          return;
-        }
+    // Respond instantly: show the new state now, check location and save in the background,
+    // and put things back (with the reason) if either one fails.
+    const before = curBadge;
+    setClockBadge(type === 'in' ? 'IN' : 'OUT', timeStr, false);
+    const undo = msg => {
+      setClockBadge(before.status, before.time, before.onBreak);
+      setStatus('err', msg);
+      busy = false;
+      refreshClockStatus();      // re-sync with what the database really says
+    };
+    setStatus('loading', '<span class="spinner"></span> ' + (type === 'in' ? 'Clocking in' : 'Clocking out') + '… confirming your location. If your browser asks, tap Allow.');
+    // Location check and the "open punch today?" lookup run at the same time
+    const lookup = sb('GET',
+      '/punches?employee_id=eq.' + verifiedEmployeeId + '&date=eq.' + dateStr +
+      '&clock_out=is.null&order=id.desc&limit=1'
+    ).then(rows => ({ rows }), error => ({ error }));
+    const geoError = await checkGeofence(verifiedBranch);
+    if (geoError) { undo(geoError); return; }
+    setStatus('loading', '<span class="spinner"></span> Saving…');
 
+    try {
+      const pre = await lookup;
+      if (pre.error) throw pre.error;
+      const open = pre.rows;
+
+      if (type === 'in') {
+        if (open && open.length > 0) { undo(verifiedName + ' is already clocked in today.'); return; }
         // Wait for the database write BEFORE confirming and unlocking
         await sb('POST', '/punches', {
           employee_id: verifiedEmployeeId,
@@ -849,17 +908,13 @@
           notes: ''
         });
         setStatus('ok', 'Clocked IN — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        await loadClockStatus();
-        setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
+        setClockBadge('IN', timeStr, false);    // turn blue right away; the refresh below confirms it
+        showSuccess('in');
+        refreshClockStatus();
+        setTimeout(() => { busy = false; }, 500);                       // accidental double-tap guard only
+        setTimeout(() => { if (document.getElementById('status').classList.contains('ok')) setStatus('', 'Clock in or out below.'); }, 2200);
 
       } else {
-        // Find open punch to close
-        const open = await sb('GET',
-          '/punches?employee_id=eq.' + verifiedEmployeeId +
-          '&date=eq.' + dateStr +
-          '&clock_out=is.null&order=id.desc&limit=1'
-        );
-
         if (!open || open.length === 0) {
           // Check if already clocked out
           const last = await sb('GET',
@@ -867,12 +922,7 @@
             '&date=eq.' + dateStr +
             '&order=id.desc&limit=1'
           );
-          if (last && last.length > 0 && last[0].clock_out) {
-            setStatus('err', verifiedName + ' has already clocked out today.');
-          } else {
-            setStatus('err', verifiedName + ' has not clocked in yet today.');
-          }
-          busy = false;
+          undo(last && last.length > 0 && last[0].clock_out ? verifiedName + ' has already clocked out today.' : verifiedName + ' has not clocked in yet today.');
           return;
         }
 
@@ -885,22 +935,18 @@
         }
 
         // Wait for the database write BEFORE confirming and unlocking
-        await sb('PATCH',
-          '/punches?id=eq.' + open[0].id,
-          patch
-        );
+        await sb('PATCH', '/punches?id=eq.' + open[0].id, patch);
         localStorage.removeItem(bKey);
         setStatus('ok', 'Clocked OUT — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
-        await loadClockStatus();
-        setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
+        setClockBadge('OUT', timeStr);
+        stopWorkClock();
+        showSuccess('out');
+        refreshClockStatus();
+        setTimeout(() => { busy = false; }, 500);                       // accidental double-tap guard only
+        setTimeout(() => { if (document.getElementById('status').classList.contains('ok')) setStatus('', 'Clock in or out below.'); }, 2200);
       }
     } catch (err) {
-      if (err.message && err.message.includes('duplicate')) {
-        setStatus('err', verifiedName + ' is already clocked in today.');
-      } else {
-        setStatus('err', 'Error: ' + err.message);
-      }
-      busy = false;
+      undo(err.message && err.message.includes('duplicate') ? verifiedName + ' is already clocked in today.' : 'Not saved — ' + (err.message || 'connection problem') + '. Please try again.');
     }
   }
 
@@ -943,7 +989,9 @@
     document.getElementById('punch-label').textContent = action === 'out' ? 'Clock out' : 'Clock in';
   }
 
+  let curBadge = { status: null, time: null, onBreak: false };
   function setClockBadge(status, time, onBreak) {
+      curBadge = { status, time, onBreak: !!onBreak };
       const badge = document.getElementById('clock-status-badge');
       const text  = document.getElementById('clock-status-text');
       const btn   = document.getElementById('punch-btn');
@@ -1008,7 +1056,8 @@
     } catch (err) {
       setStatus('err', 'Error: ' + err.message);
     }
-    setTimeout(() => { busy = false; setStatus('', 'Clock in or out below.'); }, 2200);
+    setTimeout(() => { busy = false; }, 500);
+    setTimeout(() => { if (document.getElementById('status').classList.contains('ok')) setStatus('', 'Clock in or out below.'); }, 2200);
   }
 
     function doPunch() {
@@ -1056,6 +1105,7 @@
       stillActive().then(ok => {
         if (!ok) { signOut(); setStatus('err', 'This account is no longer active. Ask your manager.'); return; }
         loadClockStatus();
+        warmLocation();
         // QR auto-punch: if URL has ?action=punch, toggle clock
         if (new URLSearchParams(window.location.search).get('action') === 'punch') {
           autoTogglePunch();
