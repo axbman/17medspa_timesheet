@@ -1483,17 +1483,17 @@
   const tsWeekKey = s => { const d = tsParse(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
   const tsWorkdays = (a, b) => { let n = 0; for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) if (TO_WORKDAYS.includes(d.getDay())) n++; return n; };
 
-  // Semi-monthly pay periods (1st–14th, 15th–end), as on the admin page.
+  // Semi-monthly pay periods (1st–15th, 16th–end), as on the admin page.
   // offset 0 = the period containing today, -1 = the one before it.
   function tsPeriod(offset) {
-    const t = new Date(), y = t.getFullYear(), m = t.getMonth(), first = t.getDate() <= 14;
+    const t = new Date(), y = t.getFullYear(), m = t.getMonth(), first = t.getDate() <= 15;
     let a, b;
     if (offset === -1) {
-      if (first) { a = new Date(y, m - 1, 15); b = new Date(y, m, 0); }
-      else       { a = new Date(y, m, 1);      b = new Date(y, m, 14); }
+      if (first) { a = new Date(y, m - 1, 16); b = new Date(y, m, 0); }
+      else       { a = new Date(y, m, 1);      b = new Date(y, m, 15); }
     } else {
-      if (first) { a = new Date(y, m, 1);      b = new Date(y, m, 14); }
-      else       { a = new Date(y, m, 15);     b = new Date(y, m + 1, 0); }
+      if (first) { a = new Date(y, m, 1);      b = new Date(y, m, 15); }
+      else       { a = new Date(y, m, 16);     b = new Date(y, m + 1, 0); }
     }
     return [ymd(a), ymd(b)];
   }
