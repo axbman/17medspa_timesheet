@@ -532,7 +532,7 @@
   <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="sp-ring" cx="50" cy="50" r="44"/><path class="sp-check" d="M30 52 L44 66 L71 36"/></svg>
   <div class="sp-text" id="sp-text">Clock in Successful</div>
 </div></div>
-<footer>Records sync in real time. · build 2026-10-13f</footer>
+<footer>Records sync in real time. · build 2026-11-16a</footer>
 
 <script>
   // ── Supabase config ─────────────────────────────────────────
@@ -550,6 +550,7 @@
   let verifiedBranch = '';
   let verifiedEmployeeId = null;
   let verifiedBranchId = null;
+  let verifiedBranchIds = [];   // every branch the person works at (primary first)
   let busy = false;
   let LOCATIONS = [];
 
@@ -614,9 +615,9 @@
   // ── Load geofence locations on page load ────────────────────
   async function loadLocations() {
     try {
-      const rows = await sb('GET', '/branches?select=name,latitude,longitude,radius');
+      const rows = await sb('GET', '/branches?select=id,name,latitude,longitude,radius');
       LOCATIONS = (rows || []).filter(r => r.latitude && r.longitude).map(r => ({
-        name: r.name, lat: r.latitude, lng: r.longitude, radius: r.radius || 200
+        id: r.id, name: r.name, lat: r.latitude, lng: r.longitude, radius: r.radius || 200
       }));
     } catch(e) {
       console.error('Could not load locations:', e);
@@ -650,19 +651,41 @@
   function getPos(opts) {
     return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, opts));
   }
+  // The branches this person may clock in at (primary first). Falls back to the primary branch name.
+  function myLocations() {
+    const ids = verifiedBranchIds.map(Number);
+    const list = LOCATIONS.filter(l => ids.includes(Number(l.id)));
+    if (list.length) return list;
+    const one = LOCATIONS.find(l => l.name === verifiedBranch);
+    return one ? [one] : [];
+  }
   function warmLocation() {
-    if (!navigator.geolocation || !LOCATIONS.find(l => l.name === verifiedBranch)) return;
+    if (!navigator.geolocation || !myLocations().length) return;
     getPos({ enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 })
       .then(p => { lastFix = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() }; })
       .catch(() => {});
   }
-  async function checkGeofence(branchName) {
-    const loc = LOCATIONS.find(l => l.name === branchName);
-    if (!loc) return null;
-    if (!navigator.geolocation) return 'Location not supported.';
-    const away = (la, ln) => getDistanceMeters(la, ln, loc.lat, loc.lng);
-    // A fix from the last two minutes that is inside the radius is good enough
-    if (lastFix && Date.now() - lastFix.t < 120000 && away(lastFix.lat, lastFix.lng) <= loc.radius) return null;
+  // Returns { error, loc }: loc = the branch the person is at (nearest one inside its radius).
+  // No branch has a location set up = no check (loc null).
+  async function checkGeofence() {
+    const locs = myLocations();
+    if (!locs.length) return { loc: null };
+    if (!navigator.geolocation) return { error: 'Location not supported.' };
+    const nearest = (la, ln) => {
+      let hit = null, hitD = Infinity, minD = Infinity;
+      locs.forEach(l => {
+        const d = getDistanceMeters(la, ln, l.lat, l.lng);
+        if (d < minD) minD = d;
+        if (d <= l.radius && d < hitD) { hit = l; hitD = d; }
+      });
+      return { hit, minD };
+    };
+    // A fix from the last two minutes that is inside a radius is good enough
+    if (lastFix && Date.now() - lastFix.t < 120000) {
+      const n = nearest(lastFix.lat, lastFix.lng);
+      if (n.hit) return { loc: n.hit };
+    }
+    const where = locs.length === 1 ? locs[0].name : 'one of your branches (' + locs.map(l => l.name).join(', ') + ')';
     let lastD = null, lastErr = null;
     const tries = [
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },   // quick: Wi-Fi / cell
@@ -672,20 +695,20 @@
       try {
         const p = await getPos(o);
         lastFix = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() };
-        const d = away(lastFix.lat, lastFix.lng);
-        if (d <= loc.radius) return null;
-        lastD = d; lastErr = null;      // outside the radius: try the more accurate reading before refusing
+        const n = nearest(lastFix.lat, lastFix.lng);
+        if (n.hit) return { loc: n.hit };
+        lastD = n.minD; lastErr = null;      // outside every radius: try the more accurate reading before refusing
       } catch (err) {
         lastErr = err;
         if (err && err.code === 1) break;   // denied: retrying will not help
       }
     }
-    if (lastD != null && !lastErr) return 'You must be at ' + branchName + '. (' + Math.round(lastD) + 'm away)';
+    if (lastD != null && !lastErr) return { error: 'You must be at ' + where + '. (' + Math.round(lastD) + 'm away)' };
     const c = lastErr && lastErr.code;
-    if (c === 1) return 'Location is blocked. Allow location for this site in your browser settings, then reload.';
-    if (c === 2) return 'Location unavailable. Turn on location services, then try again.';
-    if (c === 3) return 'Location timed out. Check that location is on, then try again.';
-    return lastD != null ? 'You must be at ' + branchName + '. (' + Math.round(lastD) + 'm away)' : 'Location error.';
+    if (c === 1) return { error: 'Location is blocked. Allow location for this site in your browser settings, then reload.' };
+    if (c === 2) return { error: 'Location unavailable. Turn on location services, then try again.' };
+    if (c === 3) return { error: 'Location timed out. Check that location is on, then try again.' };
+    return { error: lastD != null ? 'You must be at ' + where + '. (' + Math.round(lastD) + 'm away)' : 'Location error.' };
   }
 
   // ── Keypad ──────────────────────────────────────────────────
@@ -728,15 +751,20 @@
       // Query employees table using the current employees schema.
       // Columns: id, first_name, last_name, branch_id, remote, pin, email
       // Branch name is read through the existing branches relationship.
-      const rows = await sb('GET',
-        '/employees?select=id,first_name,last_name,branch_id,remote,pin,email,branches(name)&active=eq.true&pin=eq.' + encodeURIComponent(pin)
-      );
+      const empQ = cols => '/employees?select=' + cols + '&active=eq.true&pin=eq.' + encodeURIComponent(pin);
+      let rows;
+      try { rows = await sb('GET', empQ('id,first_name,last_name,branch_id,branch_ids,remote,pin,email,branches(name)')); }
+      catch (e) {
+        if (!/branch_ids/i.test(e.message || '')) throw e;     // multi-branch column not added yet
+        rows = await sb('GET', empQ('id,first_name,last_name,branch_id,remote,pin,email,branches(name)'));
+      }
 
       if (rows && rows.length > 0) {
         const emp = rows[0];
         verifiedName       = [emp.first_name, emp.last_name].filter(Boolean).join(' ');
         verifiedEmployeeId = emp.id;
         verifiedBranchId   = emp.branch_id;
+        verifiedBranchIds  = [emp.branch_id].concat(Array.isArray(emp.branch_ids) ? emp.branch_ids : []).filter((v, i, a) => v != null && a.indexOf(v) === i);
         verifiedBranch     = emp.branches ? emp.branches.name : '';
 
         updateDots('ok');
@@ -754,6 +782,7 @@
           localStorage.setItem('tc_name', verifiedName);
           localStorage.setItem('tc_branch', verifiedBranch);
           localStorage.setItem('tc_branchId', verifiedBranchId);
+          localStorage.setItem('tc_branchIds', JSON.stringify(verifiedBranchIds));
           // Load status in background
           loadClockStatus();
           warmLocation();
@@ -889,8 +918,8 @@
       '/punches?employee_id=eq.' + verifiedEmployeeId + '&date=eq.' + dateStr +
       '&clock_out=is.null&order=id.desc&limit=1'
     ).then(rows => ({ rows }), error => ({ error }));
-    const geoError = await checkGeofence(verifiedBranch);
-    if (geoError) { undo(geoError); return; }
+    const geo = await checkGeofence();
+    if (geo.error) { undo(geo.error); return; }
     setStatus('loading', '<span class="spinner"></span> Saving…');
 
     try {
@@ -901,12 +930,14 @@
       if (type === 'in') {
         if (open && open.length > 0) { undo(verifiedName + ' is already clocked in today.'); return; }
         // Wait for the database write BEFORE confirming and unlocking
-        await sb('POST', '/punches', {
-          employee_id: verifiedEmployeeId,
-          date: dateStr,
-          clock_in: timeStr,
-          notes: ''
-        });
+        // Record which branch this punch happened at (the one they are standing in; primary if no location is set up)
+        const where = geo.loc ? geo.loc.id : (verifiedBranchId != null ? Number(verifiedBranchId) : null);
+        const body = { employee_id: verifiedEmployeeId, date: dateStr, clock_in: timeStr, notes: '' };
+        try { await sb('POST', '/punches', where != null ? Object.assign({ branch_id: where }, body) : body); }
+        catch (e) {
+          if (where == null || !/branch_id/i.test(e.message || '')) throw e;   // punches.branch_id not added yet: save without it
+          await sb('POST', '/punches', body);
+        }
         setStatus('ok', 'Clocked IN — ' + verifiedName + '\n' + displayDate + ' at ' + displayTime);
         setClockBadge('IN', timeStr, false);    // turn blue right away; the refresh below confirms it
         showSuccess('in');
@@ -954,7 +985,7 @@
   function resetToPin() {
     stopWorkClock();
     pin = ''; busy = false; verifiedName = ''; verifiedBranch = '';
-    verifiedEmployeeId = null; verifiedBranchId = null;
+    verifiedEmployeeId = null; verifiedBranchId = null; verifiedBranchIds = [];
     document.getElementById('screen-pin').style.display = '';
     document.getElementById('screen-confirm').classList.remove('active');
     updateDots();
@@ -1079,13 +1110,24 @@
     localStorage.removeItem('tc_name');
     localStorage.removeItem('tc_branch');
     localStorage.removeItem('tc_branchId');
+    localStorage.removeItem('tc_branchIds');
     resetToPin();
   }
 
   // False only when the database says this employee is inactive (errors count as still active, so a hiccup never signs anyone out)
   async function stillActive() {
     try {
-      const r = await sb('GET', '/employees?select=id&active=eq.true&id=eq.' + encodeURIComponent(verifiedEmployeeId));
+      let r;
+      try { r = await sb('GET', '/employees?select=id,branch_id,branch_ids&active=eq.true&id=eq.' + encodeURIComponent(verifiedEmployeeId)); }
+      catch (e) {
+        if (!/branch_ids/i.test(e.message || '')) throw e;
+        r = await sb('GET', '/employees?select=id,branch_id&active=eq.true&id=eq.' + encodeURIComponent(verifiedEmployeeId));
+      }
+      // Keep the saved branch list current (a manager may have added a branch since this phone signed in)
+      if (Array.isArray(r) && r[0]) {
+        verifiedBranchIds = [r[0].branch_id].concat(Array.isArray(r[0].branch_ids) ? r[0].branch_ids : []).filter((v, i, a) => v != null && a.indexOf(v) === i);
+        localStorage.setItem('tc_branchIds', JSON.stringify(verifiedBranchIds));
+      }
       return Array.isArray(r) ? r.length > 0 : true;
     } catch (e) { return true; }
   }
@@ -1098,6 +1140,7 @@
       verifiedName = localStorage.getItem('tc_name');
       verifiedBranch = localStorage.getItem('tc_branch');
       verifiedBranchId = localStorage.getItem('tc_branchId');
+      try { verifiedBranchIds = JSON.parse(localStorage.getItem('tc_branchIds') || '[]'); } catch (_) { verifiedBranchIds = []; }
       document.getElementById('screen-pin').style.display = 'none';
       document.getElementById('confirm-name').textContent = verifiedName;
       document.getElementById('screen-confirm').classList.add('active');
